@@ -14,7 +14,179 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      matches: {
+        Row: {
+          created_at: string
+          id: string
+          match_date: string | null
+          player1_id: string | null
+          player2_id: string | null
+          round: string
+          score: string | null
+          status: string
+          tournament_id: string | null
+          updated_at: string
+          winner_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_date?: string | null
+          player1_id?: string | null
+          player2_id?: string | null
+          round: string
+          score?: string | null
+          status?: string
+          tournament_id?: string | null
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_date?: string | null
+          player1_id?: string | null
+          player2_id?: string | null
+          round?: string
+          score?: string | null
+          status?: string
+          tournament_id?: string | null
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matches_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          country: string
+          created_at: string
+          id: string
+          name: string
+          points: number | null
+          ranking: number | null
+          ranking_change: number | null
+          updated_at: string
+        }
+        Insert: {
+          country: string
+          created_at?: string
+          id?: string
+          name: string
+          points?: number | null
+          ranking?: number | null
+          ranking_change?: number | null
+          updated_at?: string
+        }
+        Update: {
+          country?: string
+          created_at?: string
+          id?: string
+          name?: string
+          points?: number | null
+          ranking?: number | null
+          ranking_change?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      statistics: {
+        Row: {
+          active_players: number | null
+          id: string
+          live_tournaments: number | null
+          matches_today: number | null
+          ranking_updates: number | null
+          updated_at: string
+        }
+        Insert: {
+          active_players?: number | null
+          id?: string
+          live_tournaments?: number | null
+          matches_today?: number | null
+          ranking_updates?: number | null
+          updated_at?: string
+        }
+        Update: {
+          active_players?: number | null
+          id?: string
+          live_tournaments?: number | null
+          matches_today?: number | null
+          ranking_updates?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tournaments: {
+        Row: {
+          category: string
+          created_at: string
+          end_date: string
+          id: string
+          location: string
+          name: string
+          prize_money: number | null
+          start_date: string
+          status: string
+          surface: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          end_date: string
+          id?: string
+          location: string
+          name: string
+          prize_money?: number | null
+          start_date: string
+          status?: string
+          surface: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          end_date?: string
+          id?: string
+          location?: string
+          name?: string
+          prize_money?: number | null
+          start_date?: string
+          status?: string
+          surface?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
