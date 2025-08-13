@@ -17,7 +17,7 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 125 71% 34%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 210 40% 96.1%;
@@ -26,8 +26,21 @@ All colors MUST be HSL.
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 125 71% 34%;
+    --accent-foreground: 210 40% 98%;
+    
+    /* Tennis specific design tokens */
+    --tennis-green: 125 71% 34%;
+    --tennis-orange: 31 81% 56%;
+    --tennis-court: 125 45% 95%;
+    --gradient-tennis: linear-gradient(135deg, hsl(var(--tennis-green)), hsl(var(--tennis-orange)));
+    --shadow-court: 0 10px 30px -10px hsl(var(--tennis-green) / 0.2);
+    
+    --chart-1: 125 71% 34%;
+    --chart-2: 31 81% 56%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;

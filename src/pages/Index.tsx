@@ -1,12 +1,32 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import TennisHeader from "@/components/TennisHeader";
+import StatsOverview from "@/components/StatsOverview";
+import PlayerRankings from "@/components/PlayerRankings";
+import TournamentSchedule from "@/components/TournamentSchedule";
+import TennisChatbot from "@/components/TennisChatbot";
+import LiveMatches from "@/components/LiveMatches";
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <TennisHeader />
+      
+      <main className="container mx-auto px-6 py-8">
+        <StatsOverview />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <div className="lg:col-span-2">
+            <PlayerRankings />
+          </div>
+          <div>
+            <TennisChatbot />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <TournamentSchedule />
+          <LiveMatches />
+        </div>
+      </main>
     </div>
   );
 };
