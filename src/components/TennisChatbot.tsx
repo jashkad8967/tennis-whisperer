@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageCircle, Send, Bot, User } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Message {
   id: number;
@@ -16,24 +18,17 @@ const TennisChatbot = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "Hello! I'm your tennis statistics assistant. Ask me anything about players, rankings, tournaments, or tennis statistics!",
+      text: "Hello! I'm your tennis statistics assistant with access to real-time ATP data. Ask me anything about current players, rankings, tournaments, or tennis statistics!",
       sender: "bot",
       timestamp: new Date()
     }
   ]);
   const [inputMessage, setInputMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  const sampleResponses = [
-    "Based on current ATP rankings, Novak Djokovic leads with 9,945 points.",
-    "The next Grand Slam is the French Open, starting May 26th in Paris.",
-    "Carlos Alcaraz has won 12 ATP titles and 2 Grand Slams so far.",
-    "The longest tennis match in history was 11 hours and 5 minutes at Wimbledon 2010.",
-    "Rafael Nadal has the most French Open titles with 14 championships.",
-    "Hard court is the most common surface on the ATP tour, used in about 70% of tournaments."
-  ];
-
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: messages.length + 1,
@@ -43,23 +38,49 @@ const TennisChatbot = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    setInputMessage("");
+    setIsLoading(true);
 
-    // Simulate bot response
-    setTimeout(() => {
+    try {
+      const { data, error } = await supabase.functions.invoke('tennis-chatbot', {
+        body: { message: inputMessage }
+      });
+
+      if (error) throw error;
+
       const botResponse: Message = {
         id: messages.length + 2,
-        text: sampleResponses[Math.floor(Math.random() * sampleResponses.length)],
+        text: data.response || "I'm sorry, I couldn't process your request. Please try again.",
         sender: "bot",
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, botResponse]);
-    }, 1000);
 
-    setInputMessage("");
+      setMessages(prev => [...prev, botResponse]);
+    } catch (error) {
+      console.error('Error calling chatbot:', error);
+      
+      const errorMessage: Message = {
+        id: messages.length + 2,
+        text: "I'm experiencing some technical difficulties. Please try again in a moment.",
+        sender: "bot",
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+      
+      toast({
+        title: "Error",
+        description: "Failed to get response from chatbot",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
@@ -95,7 +116,7 @@ const TennisChatbot = () => {
                         : "bg-muted"
                     }`}
                   >
-                    <p className="text-sm">{message.text}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
                     <p className="text-xs opacity-70 mt-1">
                       {message.timestamp.toLocaleTimeString()}
                     </p>
@@ -107,6 +128,20 @@ const TennisChatbot = () => {
                   )}
                 </div>
               ))}
+              {isLoading && (
+                <div className="flex items-start space-x-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="bg-muted px-4 py-2 rounded-lg">
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </ScrollArea>
           <div className="flex space-x-2">
@@ -116,13 +151,18 @@ const TennisChatbot = () => {
               onKeyPress={handleKeyPress}
               placeholder="Ask about tennis stats, players, or tournaments..."
               className="flex-1"
+              disabled={isLoading}
             />
-            <Button onClick={handleSendMessage} size="icon">
+            <Button 
+              onClick={handleSendMessage} 
+              size="icon"
+              disabled={isLoading || !inputMessage.trim()}
+            >
               <Send className="h-4 w-4" />
             </Button>
           </div>
           <div className="text-xs text-muted-foreground">
-            Try asking: "Who is ranked #1?", "When is the next Grand Slam?", or "Tell me about Nadal's records"
+            Try asking: "Who is ranked #1?", "Tell me about upcoming tournaments", or "Show me recent ranking changes"
           </div>
         </div>
       </CardContent>
