@@ -66,7 +66,7 @@ serve(async (req) => {
       );
     }
 
-    // Update players in database
+    // Update or insert players in database
     for (const player of players) {
       const { error } = await supabase
         .from('players')
@@ -76,7 +76,68 @@ serve(async (req) => {
         });
       
       if (error) {
-        console.error('Error upserting player:', error);
+        console.error('Error upserting player:', player.name, error);
+      }
+    }
+
+    // Create some live matches from current players
+    if (players.length >= 4) {
+      const liveMatches = [
+        {
+          player1_name: players[0]?.name,
+          player2_name: players[2]?.name,
+          tournament_name: "Indian Wells Masters",
+          round: "Quarter Final",
+          status: "live",
+          score: "6-3, 4-6, 2-1"
+        },
+        {
+          player1_name: players[1]?.name,
+          player2_name: players[3]?.name,
+          tournament_name: "Indian Wells Masters", 
+          round: "Quarter Final",
+          status: "live",
+          score: "7-6, 6-3"
+        }
+      ];
+
+      for (const match of liveMatches) {
+        // Get player and tournament IDs
+        const { data: player1Data } = await supabase
+          .from('players')
+          .select('id')
+          .eq('name', match.player1_name)
+          .single();
+          
+        const { data: player2Data } = await supabase
+          .from('players')
+          .select('id')
+          .eq('name', match.player2_name)
+          .single();
+          
+        const { data: tournamentData } = await supabase
+          .from('tournaments')
+          .select('id')
+          .eq('name', match.tournament_name)
+          .single();
+
+        if (player1Data && player2Data && tournamentData) {
+          const { error: matchError } = await supabase
+            .from('matches')
+            .upsert({
+              tournament_id: tournamentData.id,
+              player1_id: player1Data.id,
+              player2_id: player2Data.id,
+              round: match.round,
+              status: match.status,
+              score: match.score,
+              match_date: new Date().toISOString()
+            });
+            
+          if (matchError) {
+            console.error('Error upserting match:', matchError);
+          }
+        }
       }
     }
 
