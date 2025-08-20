@@ -14,16 +14,18 @@ const Index = () => {
         <StatsOverview />
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2" id="rankings">
             <PlayerRankings />
           </div>
-          <div>
+          <div id="ai-assistant">
             <TennisChatbot />
           </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <TournamentSchedule />
+          <div id="tournaments">
+            <TournamentSchedule />
+          </div>
           <LiveMatches />
         </div>
       </main>

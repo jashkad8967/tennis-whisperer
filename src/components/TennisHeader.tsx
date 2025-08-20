@@ -13,18 +13,27 @@ const TennisHeader = () => {
             </div>
           </div>
           <div className="flex items-center space-x-6 text-sm">
-            <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => document.getElementById('rankings')?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center space-x-2 hover:text-primary-foreground/70 transition-colors cursor-pointer"
+            >
               <TrendingUp className="h-4 w-4" />
               <span>Live Rankings</span>
-            </div>
-            <div className="flex items-center space-x-2">
+            </button>
+            <button 
+              onClick={() => document.getElementById('tournaments')?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center space-x-2 hover:text-primary-foreground/70 transition-colors cursor-pointer"
+            >
               <Calendar className="h-4 w-4" />
               <span>Tournaments</span>
-            </div>
-            <div className="flex items-center space-x-2">
+            </button>
+            <button 
+              onClick={() => document.getElementById('ai-assistant')?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center space-x-2 hover:text-primary-foreground/70 transition-colors cursor-pointer"
+            >
               <MessageCircle className="h-4 w-4" />
               <span>AI Assistant</span>
-            </div>
+            </button>
           </div>
         </div>
       </div>
