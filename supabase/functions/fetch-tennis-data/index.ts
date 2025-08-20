@@ -30,7 +30,13 @@ serve(async (req) => {
       { name: "Novak Djokovic", country: "SRB", ranking: 7, points: 4130, ranking_change: 0 },
       { name: "Alex de Minaur", country: "AUS", ranking: 8, points: 3545, ranking_change: 0 },
       { name: "Karen Khachanov", country: "RUS", ranking: 9, points: 3240, ranking_change: 0 },
-      { name: "Lorenzo Musetti", country: "ITA", ranking: 10, points: 3205, ranking_change: 0 }
+      { name: "Lorenzo Musetti", country: "ITA", ranking: 10, points: 3205, ranking_change: 0 },
+      // Additional players currently playing in tournaments
+      { name: "Lorenzo Sonego", country: "ITA", ranking: 45, points: 1090, ranking_change: -10 },
+      { name: "Yunchaokete Bu", country: "CHN", ranking: 73, points: 816, ranking_change: 3 },
+      { name: "Roberto Bautista Agut", country: "ESP", ranking: 47, points: 1075, ranking_change: 0 },
+      { name: "Marton Fucsovics", country: "HUN", ranking: 91, points: 691, ranking_change: 3 },
+      { name: "Stefanos Tsitsipas", country: "GRE", ranking: 28, points: 1790, ranking_change: 0 }
     ];
 
     // Update or insert players in database
@@ -47,24 +53,32 @@ serve(async (req) => {
       }
     }
 
-    // Create some live matches with current top players
+    // Create live matches with current top players from Winston-Salem and upcoming US Open
     if (players.length >= 4) {
       const liveMatches = [
         {
-          player1_name: players[0]?.name, // Jannik Sinner
-          player2_name: players[2]?.name, // Alexander Zverev
-          tournament_name: "US Open",
-          round: "Semi Final",
+          player1_name: "Lorenzo Sonego", // Winston-Salem defending champion
+          player2_name: "Yunchaokete Bu", // Beat Tsitsipas 
+          tournament_name: "Winston-Salem Open",
+          round: "Round of 16",
           status: "live",
-          score: "6-4, 3-6, 5-3"
+          score: "6-4, 4-6, 3-2"
         },
         {
-          player1_name: players[1]?.name, // Carlos Alcaraz
-          player2_name: players[3]?.name, // Taylor Fritz
-          tournament_name: "US Open", 
-          round: "Semi Final",
+          player1_name: "Roberto Bautista Agut",
+          player2_name: "Marton Fucsovics", 
+          tournament_name: "Winston-Salem Open", 
+          round: "Round of 16",
           status: "live",
-          score: "7-6, 6-4"
+          score: "3-6, 6-3, 4-3"
+        },
+        {
+          player1_name: players[0]?.name, // Jannik Sinner
+          player2_name: players[6]?.name, // Novak Djokovic
+          tournament_name: "US Open",
+          round: "Practice Match",
+          status: "upcoming",
+          score: ""
         }
       ];
 
@@ -158,14 +172,14 @@ serve(async (req) => {
       }
     }
 
-    // Update statistics
+    // Update statistics with current data
     const { error: statsError } = await supabase
       .from('statistics')
       .upsert({
         active_players: players.length,
-        matches_today: Math.floor(Math.random() * 15) + 5,
+        matches_today: Math.floor(Math.random() * 25) + 15, // 15-40 matches today
         ranking_updates: players.filter(p => p.ranking_change !== 0).length,
-        live_tournaments: 3
+        live_tournaments: 4 // US Open, Winston-Salem, and other current tournaments
       });
 
     if (statsError) {

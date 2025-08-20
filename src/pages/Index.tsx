@@ -1,4 +1,4 @@
-import TennisHeader from "@/components/TennisHeader";
+import DashboardHeader from "@/components/DashboardHeader";
 import StatsOverview from "@/components/StatsOverview";
 import PlayerRankings from "@/components/PlayerRankings";
 import TournamentSchedule from "@/components/TournamentSchedule";
@@ -8,7 +8,7 @@ import LiveMatches from "@/components/LiveMatches";
 const Index = () => {
   return (
     <div className="min-h-screen bg-background">
-      <TennisHeader />
+      <DashboardHeader />
       
       <main className="container mx-auto px-6 py-8">
         <StatsOverview />

@@ -18,45 +18,82 @@ serve(async (req) => {
     const { message } = await req.json();
     console.log('Received message:', message);
 
+    if (!openAIApiKey) {
+      console.error('OpenAI API key not found');
+      return new Response(
+        JSON.stringify({ error: 'OpenAI API key not configured' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Supabase configuration not found');
+      return new Response(
+        JSON.stringify({ error: 'Database configuration not found' }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Fetch current tennis data for context
-    const { data: players } = await supabase
+    console.log('Fetching tennis data...');
+    const { data: players, error: playersError } = await supabase
       .from('players')
       .select('*')
       .order('ranking')
       .limit(10);
 
-    const { data: tournaments } = await supabase
+    if (playersError) {
+      console.error('Error fetching players:', playersError);
+    }
+
+    const { data: tournaments, error: tournamentsError } = await supabase
       .from('tournaments')
       .select('*')
       .order('start_date');
 
-    const { data: stats } = await supabase
+    if (tournamentsError) {
+      console.error('Error fetching tournaments:', tournamentsError);
+    }
+
+    const { data: stats, error: statsError } = await supabase
       .from('statistics')
       .select('*')
       .limit(1);
 
+    if (statsError) {
+      console.error('Error fetching statistics:', statsError);
+    }
+
     // Build context for AI
     const context = `
-Current ATP Tennis Data:
+Current ATP Tennis Data (August 2025):
 
 Top 10 Players:
-${players?.map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} points`).join('\n') || 'No player data available'}
+${players?.map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} points`).join('\n') || 'Loading player data...'}
 
 Recent Tournaments:
-${tournaments?.map(t => `${t.name} (${t.location}) - ${t.status} - ${t.surface} court`).join('\n') || 'No tournament data available'}
+${tournaments?.map(t => `${t.name} (${t.location}) - ${t.status} - ${t.surface} court - Prize: $${t.prize_money?.toLocaleString()}`).join('\n') || 'Loading tournament data...'}
 
 Current Statistics:
 - Active Players: ${stats?.[0]?.active_players || 'N/A'}
 - Matches Today: ${stats?.[0]?.matches_today || 'N/A'}
 - Live Tournaments: ${stats?.[0]?.live_tournaments || 'N/A'}
 
-Please answer the user's question about tennis using this current data.
+Please answer the user's question about tennis using this current data. Be informative and engaging.
 `;
 
+    console.log('Making OpenAI API request...');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -68,7 +105,7 @@ Please answer the user's question about tennis using this current data.
         messages: [
           { 
             role: 'system', 
-            content: `You are a tennis statistics assistant with access to current ATP tour data. Use the provided data to answer questions about tennis rankings, tournaments, and statistics. Be informative and engaging. ${context}` 
+            content: `You are a tennis statistics assistant with access to current ATP tour data. ${context}` 
           },
           { role: 'user', content: message }
         ],
@@ -76,13 +113,23 @@ Please answer the user's question about tennis using this current data.
       }),
     });
 
+    console.log('OpenAI API response status:', response.status);
+
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('OpenAI API error:', response.status, errorText);
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
+    console.log('OpenAI API response received');
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error('Invalid OpenAI response format:', data);
+      throw new Error('Invalid response format from OpenAI');
+    }
 
+    const aiResponse = data.choices[0].message.content;
     console.log('AI response generated successfully');
 
     return new Response(
@@ -94,8 +141,16 @@ Please answer the user's question about tennis using this current data.
 
   } catch (error) {
     console.error('Error in tennis-chatbot function:', error);
+    
+    // Return a more helpful error message
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Detailed error:', errorMessage);
+    
     return new Response(
-      JSON.stringify({ error: 'Failed to generate response' }),
+      JSON.stringify({ 
+        error: 'I apologize, but I am experiencing technical difficulties. Please try again in a moment.',
+        details: errorMessage
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
