@@ -64,7 +64,7 @@ Please answer the user's question about tennis using this current data.
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini-2025-08-07',
         messages: [
           { 
             role: 'system', 
@@ -72,8 +72,7 @@ Please answer the user's question about tennis using this current data.
           },
           { role: 'user', content: message }
         ],
-        max_tokens: 500,
-        temperature: 0.7
+        max_completion_tokens: 500
       }),
     });
 
