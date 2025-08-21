@@ -54,7 +54,7 @@ const LiveMatches = () => {
         .eq('status', 'live')
         .order('match_date', { ascending: false });
       
-      if (data) {
+      if (data && data.length > 0) {
         const formattedMatches = data.map((match: any) => ({
           id: match.id,
           tournament: match.tournaments || { name: 'Unknown Tournament', surface: 'Hard' },
@@ -66,22 +66,14 @@ const LiveMatches = () => {
           match_date: match.match_date
         }));
         setMatches(formattedMatches);
+      } else {
+        // No live matches currently available
+        setMatches([]);
       }
     } catch (error) {
       console.error('Error fetching live matches:', error);
-      // Fallback to sample data if no real matches available
-      setMatches([
-        {
-          id: '1',
-          tournament: { name: 'ATP Masters', surface: 'Hard' },
-          round: 'Quarter Final',
-          player1: { name: 'Sample Player 1', ranking: 10 },
-          player2: { name: 'Sample Player 2', ranking: 15 },
-          status: 'live',
-          score: '6-3, 4-6, 2-1',
-          match_date: new Date().toISOString()
-        }
-      ]);
+      // Don't set fallback data - just show empty state
+      setMatches([]);
     } finally {
       setLoading(false);
     }
