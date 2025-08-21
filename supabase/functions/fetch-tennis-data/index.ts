@@ -130,28 +130,8 @@ async function scrapeATPRankings(): Promise<Player[]> {
     
     // If still no players found, use the current ATP rankings as fallback
     if (players.length === 0) {
-      console.log('All parsing methods failed, using current ATP rankings as fallback...');
-      
-      // Current ATP rankings as of January 2025
-      const currentRankings = [
-        { name: "Jannik Sinner", country: "ITA", ranking: 1, points: 11480, ranking_change: 0 },
-        { name: "Carlos Alcaraz", country: "ESP", ranking: 2, points: 9590, ranking_change: 0 },
-        { name: "Daniil Medvedev", country: "RUS", ranking: 3, points: 7950, ranking_change: 0 },
-        { name: "Alexander Zverev", country: "GER", ranking: 4, points: 6230, ranking_change: 0 },
-        { name: "Taylor Fritz", country: "USA", ranking: 5, points: 5575, ranking_change: 0 },
-        { name: "Jack Draper", country: "GBR", ranking: 6, points: 4440, ranking_change: 0 },
-        { name: "Ben Shelton", country: "USA", ranking: 7, points: 4280, ranking_change: 0 },
-        { name: "Novak Djokovic", country: "SRB", ranking: 8, points: 4130, ranking_change: 0 },
-        { name: "Alex de Minaur", country: "AUS", ranking: 9, points: 3545, ranking_change: 0 },
-        { name: "Karen Khachanov", country: "RUS", ranking: 10, points: 3240, ranking_change: 0 },
-        { name: "Lorenzo Musetti", country: "ITA", ranking: 11, points: 3205, ranking_change: 0 },
-        { name: "Stefanos Tsitsipas", country: "GRE", ranking: 12, points: 3180, ranking_change: 0 },
-        { name: "Holger Rune", country: "DEN", ranking: 13, points: 3150, ranking_change: 0 },
-        { name: "Casper Ruud", country: "NOR", ranking: 14, points: 3120, ranking_change: 0 },
-        { name: "Hubert Hurkacz", country: "POL", ranking: 15, points: 3090, ranking_change: 0 }
-      ];
-      
-      return currentRankings;
+      console.log('All parsing methods failed, returning empty results to avoid false data');
+      return [];
     }
     
     // Sort players by ranking to ensure correct order
@@ -174,15 +154,9 @@ async function scrapeATPRankings(): Promise<Player[]> {
   } catch (error) {
     console.error('Error scraping ATP rankings:', error);
     
-    // Return current ATP rankings as fallback
-    console.log('Using fallback ATP rankings due to scraping error...');
-    return [
-      { name: "Jannik Sinner", country: "ITA", ranking: 1, points: 11480, ranking_change: 0 },
-      { name: "Carlos Alcaraz", country: "ESP", ranking: 2, points: 9590, ranking_change: 0 },
-      { name: "Daniil Medvedev", country: "RUS", ranking: 3, points: 7950, ranking_change: 0 },
-      { name: "Alexander Zverev", country: "GER", ranking: 4, points: 6230, ranking_change: 0 },
-      { name: "Taylor Fritz", country: "USA", ranking: 5, points: 5575, ranking_change: 0 }
-    ];
+    // Return empty results to avoid false data
+    console.log('Returning empty results due to scraping error to avoid false data');
+    return [];
   }
 }
 
@@ -271,39 +245,8 @@ async function scrapeTournaments(): Promise<Tournament[]> {
     
     // If no tournaments found, create some realistic ones
     if (tournaments.length === 0) {
-      console.log('No tournaments found, creating realistic tournament data...');
-      
-      const tournamentNames = [
-        'Australian Open', 'Roland Garros', 'Wimbledon', 'US Open',
-        'Miami Open', 'Indian Wells Masters', 'Monte Carlo Masters',
-        'Madrid Open', 'Rome Masters', 'Canadian Open', 'Cincinnati Masters',
-        'Paris Masters', 'ATP Finals', 'Adelaide International', 'Brisbane International'
-      ];
-      
-      const cities = [
-        'Melbourne, AUS', 'Paris, FRA', 'London, GBR', 'New York, USA',
-        'Miami, USA', 'Indian Wells, USA', 'Monte Carlo, MON',
-        'Madrid, ESP', 'Rome, ITA', 'Toronto, CAN', 'Cincinnati, USA',
-        'Paris, FRA', 'Turin, ITA', 'Adelaide, AUS', 'Brisbane, AUS'
-      ];
-      
-      const surfaces = ['Hard', 'Clay', 'Grass', 'Hard', 'Hard', 'Hard', 'Clay', 'Clay', 'Clay', 'Hard', 'Hard', 'Hard', 'Hard', 'Hard', 'Hard'];
-      
-      for (let i = 0; i < Math.min(tournamentNames.length, 15); i++) {
-        const startDate = new Date(Date.now() + i * 7 * 24 * 60 * 60 * 1000);
-        const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-        
-        tournaments.push({
-          name: tournamentNames[i],
-          location: cities[i],
-          surface: surfaces[i],
-          start_date: startDate.toISOString().split('T')[0],
-          end_date: endDate.toISOString().split('T')[0],
-          prize_money: i < 4 ? 2000000 : Math.floor(Math.random() * 1000000) + 100000,
-          category: i < 4 ? 'Grand Slam' : (i < 9 ? 'ATP 1000' : 'ATP 500'),
-          status: 'upcoming'
-        });
-      }
+      console.log('No tournaments found, returning empty results to avoid false data');
+      return [];
     }
     
     console.log(`Successfully scraped ${tournaments.length} tournaments`);
@@ -312,29 +255,9 @@ async function scrapeTournaments(): Promise<Tournament[]> {
   } catch (error) {
     console.error('Error scraping tournaments:', error);
     
-    // Return fallback tournament data
-    return [
-      {
-        name: 'Australian Open',
-        location: 'Melbourne, AUS',
-        surface: 'Hard',
-        start_date: '2025-01-20',
-        end_date: '2025-02-02',
-        prize_money: 2000000,
-        category: 'Grand Slam',
-        status: 'upcoming'
-      },
-      {
-        name: 'Roland Garros',
-        location: 'Paris, FRA',
-        surface: 'Clay',
-        start_date: '2025-05-26',
-        end_date: '2025-06-08',
-        prize_money: 2000000,
-        category: 'Grand Slam',
-        status: 'upcoming'
-      }
-    ];
+    // Return empty results to avoid false data
+    console.log('Returning empty results due to scraping error to avoid false data');
+    return [];
   }
 }
 
@@ -423,25 +346,8 @@ async function scrapeLiveMatches(): Promise<LiveMatch[]> {
     
     // If still no matches found, create some realistic live matches
     if (matches.length === 0) {
-      console.log('No live matches found, creating realistic match data...');
-      
-      const playerPairs = [
-        'Jannik Sinner vs Carlos Alcaraz',
-        'Daniil Medvedev vs Alexander Zverev',
-        'Taylor Fritz vs Jack Draper',
-        'Ben Shelton vs Novak Djokovic',
-        'Alex de Minaur vs Karen Khachanov'
-      ];
-      
-      const scores = ['6-4, 3-6, 2-1', '7-5, 4-6, 1-0', '6-3, 4-6, 3-2', '5-7, 6-4, 2-1', '6-2, 3-6, 4-3'];
-      
-      for (let i = 0; i < Math.min(playerPairs.length, 5); i++) {
-        matches.push({
-          player_name: playerPairs[i],
-          score: scores[i],
-          status: 'Live'
-        });
-      }
+      console.log('No live matches found, returning empty results to avoid false data');
+      return [];
     }
     
     console.log(`Successfully scraped ${matches.length} live matches`);
@@ -450,19 +356,9 @@ async function scrapeLiveMatches(): Promise<LiveMatch[]> {
   } catch (error) {
     console.error('Error scraping live matches:', error);
     
-    // Return fallback live match data
-    return [
-      {
-        player_name: 'Jannik Sinner vs Carlos Alcaraz',
-        score: '6-4, 3-6, 2-1',
-        status: 'Live'
-      },
-      {
-        player_name: 'Daniil Medvedev vs Alexander Zverev',
-        score: '7-5, 4-6, 1-0',
-        status: 'Live'
-      }
-    ];
+    // Return empty results to avoid false data
+    console.log('Returning empty results due to scraping error to avoid false data');
+    return [];
   }
 }
 
