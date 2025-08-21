@@ -52,83 +52,173 @@ async function scrapeATPRankings(): Promise<Player[]> {
     const html = await response.text();
     const players: Player[] = [];
 
+    console.log('Parsing ATP rankings HTML...');
+    
     // Parse the actual HTML structure from ATP rankings page
-    // Looking for the ranking table structure with player information
+    // Based on the HTML content provided by the user
     
-    // Extract all ranking rows - look for the specific structure in the HTML
-    const rankingRows = html.match(/<tr[^>]*class="[^"]*ranking-row[^"]*"[^>]*>[\s\S]*?<\/tr>/gi);
+    // Method 1: Look for ranking table rows with player information
+    const tableRows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
     
-    if (rankingRows && rankingRows.length > 0) {
-      console.log(`Found ${rankingRows.length} ranking rows, parsing...`);
+    if (tableRows) {
+      console.log(`Found ${tableRows.length} table rows, analyzing for rankings...`);
       
-      for (const row of rankingRows) {
+      for (const row of tableRows) {
         if (players.length >= 100) break;
         
-        // Extract ranking number from the first column
-        const rankingMatch = row.match(/<td[^>]*class="[^"]*ranking[^"]*"[^>]*>(\d+)<\/td>/);
+        // Look for player links in the row
+        const playerLinkMatch = row.match(/<a[^>]*href="[^"]*\/players\/[^"]*"[^>]*>([^<]+)<\/a>/i);
+        if (!playerLinkMatch) continue;
+        
+        const playerName = playerLinkMatch[1].trim();
+        
+        // Skip if name is too short or contains HTML
+        if (playerName.length < 3 || playerName.includes('<') || playerName.includes('>')) continue;
+        
+        // Look for ranking number in the same row
+        const rankingMatch = row.match(/(\d+)/);
         if (!rankingMatch) continue;
+        
         const ranking = parseInt(rankingMatch[1]);
+        if (ranking < 1 || ranking > 100) continue;
         
-        // Extract player name from the player column
-        const nameMatch = row.match(/<td[^>]*class="[^"]*player[^"]*"[^>]*>[\s\S]*?<a[^>]*href="[^"]*\/players\/[^"]*"[^>]*>([^<]+)<\/a>/);
-        if (!nameMatch) continue;
-        const name = nameMatch[1].trim();
-        
-        // Extract country from the country column
-        const countryMatch = row.match(/<td[^>]*class="[^"]*country[^"]*"[^>]*>([A-Z]{3})<\/td>/);
+        // Look for country code (3 letter country codes)
+        const countryMatch = row.match(/([A-Z]{3})/);
         const country = countryMatch ? countryMatch[1] : 'Unknown';
         
-        // Extract points from the points column
-        const pointsMatch = row.match(/<td[^>]*class="[^"]*points[^"]*"[^>]*>([0-9,]+)<\/td>/);
+        // Look for points (should be 4-6 digits, possibly with commas)
+        const pointsMatch = row.match(/([0-9,]+)/);
         if (!pointsMatch) continue;
-        const points = parseInt(pointsMatch[1].replace(/,/g, ''));
         
-        if (name && !isNaN(ranking) && !isNaN(points)) {
+        const points = parseInt(pointsMatch[1].replace(/,/g, ''));
+        if (points < 0) continue; // Allow 0 points (unranked players)
+        
+        // Check if we already have this player
+        if (!players.find(p => p.name === playerName)) {
           players.push({
-            name: name,
+            name: playerName,
             country: country,
             ranking: ranking,
             points: points,
             ranking_change: 0
           });
+          
+          console.log(`Found player: ${playerName} - Rank #${ranking}, ${country}, ${points} points`);
         }
       }
     }
     
-    // If the above parsing didn't work, try alternative approach
+    // Method 2: If table parsing didn't work, try parsing line by line
     if (players.length === 0) {
-      console.log('Primary parsing failed, trying alternative approach...');
+      console.log('Table parsing failed, trying line-by-line parsing...');
       
-      // Look for player entries in a different format
-      const playerEntries = html.match(/<tr[^>]*>[\s\S]*?<td[^>]*>(\d+)<\/td>[\s\S]*?<td[^>]*>[\s\S]*?<a[^>]*href="[^"]*\/players\/[^"]*"[^>]*>([^<]+)<\/a>[\s\S]*?<td[^>]*>([A-Z]{3})<\/td>[\s\S]*?<td[^>]*>([0-9,]+)<\/td>/gi);
+      const lines = html.split('\n');
+      let currentRank = 1;
       
-      if (playerEntries) {
-        for (const entry of playerEntries) {
-          if (players.length >= 100) break;
-          
-          const match = entry.match(/<td[^>]*>(\d+)<\/td>[\s\S]*?<a[^>]*href="[^"]*\/players\/[^"]*"[^>]*>([^<]+)<\/a>[\s\S]*?<td[^>]*>([A-Z]{3})<\/td>[\s\S]*?<td[^>]*>([0-9,]+)<\/td>/i);
-          
-          if (match) {
-            const ranking = parseInt(match[1]);
-            const name = match[2].trim();
-            const country = match[3];
-            const points = parseInt(match[4].replace(/,/g, ''));
+      for (let i = 0; i < lines.length && currentRank <= 100; i++) {
+        const line = lines[i];
+        
+        // Look for player links
+        if (line.includes('/players/') && line.includes('href=')) {
+          const nameMatch = line.match(/>([^<]+)<\/a>/);
+          if (nameMatch) {
+            const name = nameMatch[1].trim();
             
-            if (name && !isNaN(ranking) && !isNaN(points)) {
-              players.push({
-                name: name,
-                country: country,
-                ranking: ranking,
-                points: points,
-                ranking_change: 0
-              });
+            // Skip if name is too short or contains HTML
+            if (name.length < 3 || name.includes('<') || name.includes('>')) continue;
+            
+            // Look for ranking in nearby lines
+            let ranking = currentRank;
+            let country = 'Unknown';
+            let points = 0;
+            
+            // Search surrounding context for ranking, country, and points
+            for (let j = Math.max(0, i - 10); j < Math.min(lines.length, i + 15); j++) {
+              const contextLine = lines[j];
+              
+              // Look for ranking number
+              if (ranking === currentRank) {
+                const rankMatch = contextLine.match(/(\d+)/);
+                if (rankMatch) {
+                  const potentialRank = parseInt(rankMatch[1]);
+                  if (potentialRank > 0 && potentialRank <= 100) {
+                    ranking = potentialRank;
+                  }
+                }
+              }
+              
+              // Look for country code
+              if (country === 'Unknown') {
+                const countryMatch = contextLine.match(/([A-Z]{3})/);
+                if (countryMatch) {
+                  country = countryMatch[1];
+                }
+              }
+              
+              // Look for points (should be 4-5 digits)
+              if (points === 0) {
+                const pointsMatch = contextLine.match(/([0-9,]+)/);
+                if (pointsMatch) {
+                  const potentialPoints = parseInt(pointsMatch[1].replace(/,/g, ''));
+                  if (potentialPoints >= 0) { // Allow 0 points and above
+                    points = potentialPoints;
+                  }
+                }
+              }
+            }
+            
+            if (name && points > 0) {
+              // Check if we already have this player
+              if (!players.find(p => p.name === name)) {
+                players.push({
+                  name: name,
+                  country: country,
+                  ranking: ranking,
+                  points: points,
+                  ranking_change: 0
+                });
+                
+                console.log(`Found player: ${name} - Rank #${ranking}, ${country}, ${points} points`);
+                currentRank++;
+              }
             }
           }
         }
       }
     }
     
-    // If still no players found, use the current ATP rankings as fallback
+    // Method 3: Look for specific patterns in the HTML
+    if (players.length === 0) {
+      console.log('Line-by-line parsing failed, trying pattern matching...');
+      
+      // Look for player names followed by rankings and points
+      const playerPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)[^0-9]*(\d+)[^A-Z]*([A-Z]{3})[^0-9]*([0-9,]+)/gi;
+      let match;
+      
+      while ((match = playerPattern.exec(html)) !== null && players.length < 100) {
+        const name = match[1].trim();
+        const ranking = parseInt(match[2]);
+        const country = match[3];
+        const points = parseInt(match[4].replace(/,/g, ''));
+        
+        if (name && !isNaN(ranking) && !isNaN(points) && ranking > 0 && ranking <= 100 && points >= 0) {
+          // Check if we already have this player
+          if (!players.find(p => p.name === name)) {
+            players.push({
+              name: name,
+              country: country,
+              ranking: ranking,
+              points: points,
+              ranking_change: 0
+            });
+            
+            console.log(`Found player via pattern: ${name} - Rank #${ranking}, ${country}, ${points} points`);
+          }
+        }
+      }
+    }
+    
+    // If still no players found, return empty results
     if (players.length === 0) {
       console.log('All parsing methods failed, returning empty results to avoid false data');
       return [];
@@ -185,6 +275,8 @@ async function scrapeTournaments(): Promise<Tournament[]> {
         if (response.ok) {
           const html = await response.text();
           
+          console.log(`Parsing tournaments from ${url}...`);
+          
           // Parse tournament entries from the HTML
           // Look for tournament links and details
           const tournamentMatches = html.match(/<a[^>]*href="[^"]*\/tournaments\/[^"]*"[^>]*>([^<]+)<\/a>/gi);
@@ -199,6 +291,9 @@ async function scrapeTournaments(): Promise<Tournament[]> {
                 
                 // Skip if name is too short or contains HTML
                 if (name.length < 3 || name.includes('<') || name.includes('>')) continue;
+                
+                // Skip generic tournament links
+                if (name.toLowerCase().includes('tournaments') || name.toLowerCase().includes('calendar')) continue;
                 
                 // Look for tournament details in surrounding context
                 const contextStart = Math.max(0, html.indexOf(match) - 500);
@@ -218,6 +313,18 @@ async function scrapeTournaments(): Promise<Tournament[]> {
                 else if (context.includes('grass') || context.includes('Grass')) surface = 'Grass';
                 else if (context.includes('carpet') || context.includes('Carpet')) surface = 'Carpet';
                 
+                // Determine tournament category based on name
+                let category = 'ATP 250';
+                if (name.includes('Open') || name.includes('Championships')) {
+                  category = 'Grand Slam';
+                } else if (name.includes('Masters') || name.includes('1000')) {
+                  category = 'ATP 1000';
+                } else if (name.includes('500')) {
+                  category = 'ATP 500';
+                } else if (name.includes('Finals')) {
+                  category = 'ATP Finals';
+                }
+                
                 // Generate realistic tournament data
                 const tournament: Tournament = {
                   name: name,
@@ -226,13 +333,14 @@ async function scrapeTournaments(): Promise<Tournament[]> {
                   start_date: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                   end_date: new Date(Date.now() + (Math.random() * 30 + 7) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                   prize_money: Math.floor(Math.random() * 1000000) + 100000,
-                  category: Math.random() > 0.5 ? 'ATP 250' : 'ATP 500',
+                  category: category,
                   status: 'upcoming'
                 };
                 
                 // Avoid duplicates
                 if (!tournaments.find(t => t.name === name)) {
                   tournaments.push(tournament);
+                  console.log(`Found tournament: ${name} - ${location}, ${surface}, ${category}`);
                 }
               }
             }
@@ -243,7 +351,7 @@ async function scrapeTournaments(): Promise<Tournament[]> {
       }
     }
     
-    // If no tournaments found, create some realistic ones
+    // If no tournaments found, return empty results
     if (tournaments.length === 0) {
       console.log('No tournaments found, returning empty results to avoid false data');
       return [];
@@ -279,13 +387,17 @@ async function scrapeLiveMatches(): Promise<LiveMatch[]> {
     const html = await response.text();
     const matches: LiveMatch[] = [];
     
+    console.log('Parsing live matches HTML...');
+    
     // Parse live match data from the HTML
     // Look for match entries with player names and scores
     
-    // Try to find match containers
+    // Method 1: Try to find match containers
     const matchContainers = html.match(/<div[^>]*class="[^"]*match[^"]*"[^>]*>[\s\S]*?<\/div>/gi);
     
     if (matchContainers) {
+      console.log(`Found ${matchContainers.length} match containers, parsing...`);
+      
       for (const container of matchContainers) {
         if (matches.length >= 20) break;
         
@@ -310,14 +422,16 @@ async function scrapeLiveMatches(): Promise<LiveMatch[]> {
               score: score,
               status: status
             });
+            
+            console.log(`Found live match: ${player1Name} vs ${player2Name} - ${score} (${status})`);
           }
         }
       }
     }
     
-    // If no matches found with the above method, try alternative parsing
+    // Method 2: If no matches found with containers, try alternative parsing
     if (matches.length === 0) {
-      console.log('Primary parsing failed, trying alternative approach...');
+      console.log('Container parsing failed, trying alternative approach...');
       
       // Look for player names and scores in a different format
       const playerScorePattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+vs\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi;
@@ -341,10 +455,49 @@ async function scrapeLiveMatches(): Promise<LiveMatch[]> {
           score: score,
           status: 'Live'
         });
+        
+        console.log(`Found live match via pattern: ${player1} vs ${player2} - ${score}`);
       }
     }
     
-    // If still no matches found, create some realistic live matches
+    // Method 3: Look for specific match patterns
+    if (matches.length === 0) {
+      console.log('Pattern parsing failed, trying direct HTML analysis...');
+      
+      // Look for any text that looks like a tennis match
+      const lines = html.split('\n');
+      
+      for (let i = 0; i < lines.length && matches.length < 20; i++) {
+        const line = lines[i];
+        
+        // Look for lines that contain player names and scores
+        if (line.includes(' vs ') && (line.includes('-') || line.includes(':'))) {
+          const vsMatch = line.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+vs\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
+          
+          if (vsMatch) {
+            const player1 = vsMatch[1].trim();
+            const player2 = vsMatch[2].trim();
+            
+            // Look for score in the same line or nearby
+            let score = '0-0';
+            const scoreMatch = line.match(/(\d+)-(\d+)/);
+            if (scoreMatch) {
+              score = `${scoreMatch[1]}-${scoreMatch[2]}`;
+            }
+            
+            matches.push({
+              player_name: `${player1} vs ${player2}`,
+              score: score,
+              status: 'Live'
+            });
+            
+            console.log(`Found live match via line analysis: ${player1} vs ${player2} - ${score}`);
+          }
+        }
+      }
+    }
+    
+    // If still no matches found, return empty results
     if (matches.length === 0) {
       console.log('No live matches found, returning empty results to avoid false data');
       return [];
