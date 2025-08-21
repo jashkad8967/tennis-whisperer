@@ -55,43 +55,54 @@ async function scrapeATPRankings(): Promise<Player[]> {
     console.log('Parsing ATP rankings HTML...');
     
     // Parse the actual HTML structure from ATP rankings page
-    // Based on the HTML content provided by the user
+    // Based on the exact format shown on the user's page
     
-    // Method 1: Look for ranking table rows with player information
-    const tableRows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+    // Method 1: Look for the specific ranking table structure
+    // The page shows: Rank | Player (with initials) | Country | Points | Change
     
-    if (tableRows) {
-      console.log(`Found ${tableRows.length} table rows, analyzing for rankings...`);
+    // Look for ranking rows with the specific structure
+    const rankingRows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+    
+    if (rankingRows) {
+      console.log(`Found ${rankingRows.length} table rows, analyzing for rankings...`);
       
-      for (const row of tableRows) {
+      for (const row of rankingRows) {
         if (players.length >= 100) break;
         
-        // Look for player links in the row
-        const playerLinkMatch = row.match(/<a[^>]*href="[^"]*\/players\/[^"]*"[^>]*>([^<]+)<\/a>/i);
-        if (!playerLinkMatch) continue;
-        
-        const playerName = playerLinkMatch[1].trim();
-        
-        // Skip if name is too short or contains HTML
-        if (playerName.length < 3 || playerName.includes('<') || playerName.includes('>')) continue;
-        
-        // Look for ranking number in the same row
-        const rankingMatch = row.match(/(\d+)/);
+        // Look for ranking number (should be #1, #2, etc.)
+        const rankingMatch = row.match(/#(\d+)/);
         if (!rankingMatch) continue;
         
         const ranking = parseInt(rankingMatch[1]);
         if (ranking < 1 || ranking > 100) continue;
         
-        // Look for country code (3 letter country codes)
+        // Look for player initials (like JS, CA, AZ, etc.)
+        const initialsMatch = row.match(/([A-Z]{2})/);
+        if (!initialsMatch) continue;
+        
+        // Look for player name (should be after initials)
+        const nameMatch = row.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+        if (!nameMatch) continue;
+        
+        const playerName = nameMatch[1].trim();
+        
+        // Skip if name is too short or contains HTML
+        if (playerName.length < 3 || playerName.includes('<') || playerName.includes('>')) continue;
+        
+        // Look for country code (3 letter country codes like ITA, ESP, GER)
         const countryMatch = row.match(/([A-Z]{3})/);
         const country = countryMatch ? countryMatch[1] : 'Unknown';
         
-        // Look for points (should be 4-6 digits, possibly with commas)
+        // Look for points (should be numbers with commas like 11,480, 9,590)
         const pointsMatch = row.match(/([0-9,]+)/);
         if (!pointsMatch) continue;
         
         const points = parseInt(pointsMatch[1].replace(/,/g, ''));
         if (points < 0) continue; // Allow 0 points (unranked players)
+        
+        // Look for ranking change (like +2, -1, or -)
+        const changeMatch = row.match(/([+-]\d+)|-/);
+        const rankingChange = changeMatch ? (changeMatch[1] ? parseInt(changeMatch[1]) : 0) : 0;
         
         // Check if we already have this player
         if (!players.find(p => p.name === playerName)) {
@@ -100,106 +111,29 @@ async function scrapeATPRankings(): Promise<Player[]> {
             country: country,
             ranking: ranking,
             points: points,
-            ranking_change: 0
+            ranking_change: rankingChange
           });
           
-          console.log(`Found player: ${playerName} - Rank #${ranking}, ${country}, ${points} points`);
+          console.log(`Found player: ${playerName} (${initialsMatch[1]}) - Rank #${ranking}, ${country}, ${points} points, change: ${rankingChange}`);
         }
       }
     }
     
-    // Method 2: If table parsing didn't work, try parsing line by line
+    // Method 2: If table parsing didn't work, try parsing the specific format from the page
     if (players.length === 0) {
-      console.log('Table parsing failed, trying line-by-line parsing...');
+      console.log('Table parsing failed, trying specific format parsing...');
       
-      const lines = html.split('\n');
-      let currentRank = 1;
-      
-      for (let i = 0; i < lines.length && currentRank <= 100; i++) {
-        const line = lines[i];
-        
-        // Look for player links
-        if (line.includes('/players/') && line.includes('href=')) {
-          const nameMatch = line.match(/>([^<]+)<\/a>/);
-          if (nameMatch) {
-            const name = nameMatch[1].trim();
-            
-            // Skip if name is too short or contains HTML
-            if (name.length < 3 || name.includes('<') || name.includes('>')) continue;
-            
-            // Look for ranking in nearby lines
-            let ranking = currentRank;
-            let country = 'Unknown';
-            let points = 0;
-            
-            // Search surrounding context for ranking, country, and points
-            for (let j = Math.max(0, i - 10); j < Math.min(lines.length, i + 15); j++) {
-              const contextLine = lines[j];
-              
-              // Look for ranking number
-              if (ranking === currentRank) {
-                const rankMatch = contextLine.match(/(\d+)/);
-                if (rankMatch) {
-                  const potentialRank = parseInt(rankMatch[1]);
-                  if (potentialRank > 0 && potentialRank <= 100) {
-                    ranking = potentialRank;
-                  }
-                }
-              }
-              
-              // Look for country code
-              if (country === 'Unknown') {
-                const countryMatch = contextLine.match(/([A-Z]{3})/);
-                if (countryMatch) {
-                  country = countryMatch[1];
-                }
-              }
-              
-              // Look for points (should be 4-5 digits)
-              if (points === 0) {
-                const pointsMatch = contextLine.match(/([0-9,]+)/);
-                if (pointsMatch) {
-                  const potentialPoints = parseInt(pointsMatch[1].replace(/,/g, ''));
-                  if (potentialPoints >= 0) { // Allow 0 points and above
-                    points = potentialPoints;
-                  }
-                }
-              }
-            }
-            
-            if (name && points > 0) {
-              // Check if we already have this player
-              if (!players.find(p => p.name === name)) {
-                players.push({
-                  name: name,
-                  country: country,
-                  ranking: ranking,
-                  points: points,
-                  ranking_change: 0
-                });
-                
-                console.log(`Found player: ${name} - Rank #${ranking}, ${country}, ${points} points`);
-                currentRank++;
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    // Method 3: Look for specific patterns in the HTML
-    if (players.length === 0) {
-      console.log('Line-by-line parsing failed, trying pattern matching...');
-      
-      // Look for player names followed by rankings and points
-      const playerPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)[^0-9]*(\d+)[^A-Z]*([A-Z]{3})[^0-9]*([0-9,]+)/gi;
+      // Look for the exact pattern: #Rank | Initials | Name | Country | Points | Change
+      const rankingPattern = /#(\d+)[^A-Z]*([A-Z]{2})[^A-Z]*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)[^A-Z]*([A-Z]{3})[^0-9]*([0-9,]+)[^+-]*([+-]\d+)?/gi;
       let match;
       
-      while ((match = playerPattern.exec(html)) !== null && players.length < 100) {
-        const name = match[1].trim();
-        const ranking = parseInt(match[2]);
-        const country = match[3];
-        const points = parseInt(match[4].replace(/,/g, ''));
+      while ((match = rankingPattern.exec(html)) !== null && players.length < 100) {
+        const ranking = parseInt(match[1]);
+        const initials = match[2];
+        const name = match[3].trim();
+        const country = match[4];
+        const points = parseInt(match[5].replace(/,/g, ''));
+        const change = match[6] ? parseInt(match[6]) : 0;
         
         if (name && !isNaN(ranking) && !isNaN(points) && ranking > 0 && ranking <= 100 && points >= 0) {
           // Check if we already have this player
@@ -209,10 +143,95 @@ async function scrapeATPRankings(): Promise<Player[]> {
               country: country,
               ranking: ranking,
               points: points,
-              ranking_change: 0
+              ranking_change: change
             });
             
-            console.log(`Found player via pattern: ${name} - Rank #${ranking}, ${country}, ${points} points`);
+            console.log(`Found player via pattern: ${name} (${initials}) - Rank #${ranking}, ${country}, ${points} points, change: ${change}`);
+          }
+        }
+      }
+    }
+    
+    // Method 3: Look for player entries line by line
+    if (players.length === 0) {
+      console.log('Pattern parsing failed, trying line-by-line parsing...');
+      
+      const lines = html.split('\n');
+      let currentRank = 1;
+      
+      for (let i = 0; i < lines.length && currentRank <= 100; i++) {
+        const line = lines[i];
+        
+        // Look for lines that contain ranking information
+        if (line.includes('#') && line.includes('vs') === false) {
+          // Look for ranking number
+          const rankMatch = line.match(/#(\d+)/);
+          if (rankMatch) {
+            const ranking = parseInt(rankMatch[1]);
+            if (ranking > 0 && ranking <= 100) {
+              
+              // Look for player name in the same line
+              const nameMatch = line.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+              if (nameMatch) {
+                const name = nameMatch[1].trim();
+                
+                // Skip if name is too short or contains HTML
+                if (name.length < 3 || name.includes('<') || name.includes('>')) continue;
+                
+                // Look for country and points in nearby lines
+                let country = 'Unknown';
+                let points = 0;
+                let change = 0;
+                
+                // Search surrounding context
+                for (let j = Math.max(0, i - 5); j < Math.min(lines.length, i + 10); j++) {
+                  const contextLine = lines[j];
+                  
+                  // Look for country code
+                  if (country === 'Unknown') {
+                    const countryMatch = contextLine.match(/([A-Z]{3})/);
+                    if (countryMatch) {
+                      country = countryMatch[1];
+                    }
+                  }
+                  
+                  // Look for points
+                  if (points === 0) {
+                    const pointsMatch = contextLine.match(/([0-9,]+)/);
+                    if (pointsMatch) {
+                      const potentialPoints = parseInt(pointsMatch[1].replace(/,/g, ''));
+                      if (potentialPoints >= 0) {
+                        points = potentialPoints;
+                      }
+                    }
+                  }
+                  
+                  // Look for ranking change
+                  if (change === 0) {
+                    const changeMatch = contextLine.match(/([+-]\d+)/);
+                    if (changeMatch) {
+                      change = parseInt(changeMatch[1]);
+                    }
+                  }
+                }
+                
+                if (name && points > 0) {
+                  // Check if we already have this player
+                  if (!players.find(p => p.name === name)) {
+                    players.push({
+                      name: name,
+                      country: country,
+                      ranking: ranking,
+                      points: points,
+                      ranking_change: change
+                    });
+                    
+                    console.log(`Found player via line analysis: ${name} - Rank #${ranking}, ${country}, ${points} points, change: ${change}`);
+                    currentRank++;
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -278,69 +297,183 @@ async function scrapeTournaments(): Promise<Tournament[]> {
           console.log(`Parsing tournaments from ${url}...`);
           
           // Parse tournament entries from the HTML
-          // Look for tournament links and details
-          const tournamentMatches = html.match(/<a[^>]*href="[^"]*\/tournaments\/[^"]*"[^>]*>([^<]+)<\/a>/gi);
+          // Look for the specific tournament format shown on the user's page
           
-          if (tournamentMatches) {
-            for (const match of tournamentMatches) {
+          // Method 1: Look for tournament containers with the specific structure
+          const tournamentContainers = html.match(/<div[^>]*class="[^"]*tournament[^"]*"[^>]*>[\s\S]*?<\/div>/gi);
+          
+          if (tournamentContainers) {
+            console.log(`Found ${tournamentContainers.length} tournament containers, parsing...`);
+            
+            for (const container of tournamentContainers) {
               if (tournaments.length >= 50) break;
               
-              const nameMatch = match.match(/<a[^>]*href="[^"]*\/tournaments\/[^"]*"[^>]*>([^<]+)<\/a>/i);
-              if (nameMatch) {
-                const name = nameMatch[1].trim();
+              // Extract tournament name
+              const nameMatch = container.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+              if (!nameMatch) continue;
+              
+              const name = nameMatch[1].trim();
+              
+              // Skip if name is too short or contains HTML
+              if (name.length < 3 || name.includes('<') || name.includes('>')) continue;
+              
+              // Skip generic tournament links
+              if (name.toLowerCase().includes('tournaments') || name.toLowerCase().includes('calendar')) continue;
+              
+              // Extract location (look for city, country pattern)
+              let location = 'Unknown';
+              const locationMatch = container.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\s*([A-Z][a-z]+)/);
+              if (locationMatch) {
+                location = `${locationMatch[1]}, ${locationMatch[2]}`;
+              }
+              
+              // Extract surface (look for surface indicators)
+              let surface = 'Hard';
+              if (container.includes('clay') || container.includes('Clay')) surface = 'Clay';
+              else if (container.includes('grass') || container.includes('Grass')) surface = 'Grass';
+              else if (container.includes('carpet') || container.includes('Carpet')) surface = 'Carpet';
+              
+              // Extract dates (look for date patterns like "Mar 5 - Mar 16, 2024")
+              let startDate = new Date();
+              let endDate = new Date();
+              const dateMatch = container.match(/([A-Z][a-z]+)\s+(\d+)\s*-\s*([A-Z][a-z]+)\s+(\d+),\s*(\d{4})/);
+              if (dateMatch) {
+                const month1 = dateMatch[1];
+                const day1 = parseInt(dateMatch[2]);
+                const month2 = dateMatch[3];
+                const day2 = parseInt(dateMatch[4]);
+                const year = parseInt(dateMatch[5]);
                 
-                // Skip if name is too short or contains HTML
-                if (name.length < 3 || name.includes('<') || name.includes('>')) continue;
-                
-                // Skip generic tournament links
-                if (name.toLowerCase().includes('tournaments') || name.toLowerCase().includes('calendar')) continue;
-                
-                // Look for tournament details in surrounding context
-                const contextStart = Math.max(0, html.indexOf(match) - 500);
-                const contextEnd = Math.min(html.length, html.indexOf(match) + 500);
-                const context = html.substring(contextStart, contextEnd);
-                
-                // Extract location (look for city/country patterns)
-                let location = 'Unknown';
-                const locationMatch = context.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\s*([A-Z]{2,3})/);
-                if (locationMatch) {
-                  location = `${locationMatch[1]}, ${locationMatch[2]}`;
-                }
-                
-                // Extract surface (look for surface indicators)
-                let surface = 'Hard';
-                if (context.includes('clay') || context.includes('Clay')) surface = 'Clay';
-                else if (context.includes('grass') || context.includes('Grass')) surface = 'Grass';
-                else if (context.includes('carpet') || context.includes('Carpet')) surface = 'Carpet';
-                
-                // Determine tournament category based on name
-                let category = 'ATP 250';
-                if (name.includes('Open') || name.includes('Championships')) {
-                  category = 'Grand Slam';
-                } else if (name.includes('Masters') || name.includes('1000')) {
-                  category = 'ATP 1000';
-                } else if (name.includes('500')) {
-                  category = 'ATP 500';
-                } else if (name.includes('Finals')) {
-                  category = 'ATP Finals';
-                }
-                
-                // Generate realistic tournament data
-                const tournament: Tournament = {
-                  name: name,
-                  location: location,
-                  surface: surface,
-                  start_date: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  end_date: new Date(Date.now() + (Math.random() * 30 + 7) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  prize_money: Math.floor(Math.random() * 1000000) + 100000,
-                  category: category,
-                  status: 'upcoming'
+                // Convert month names to numbers
+                const monthMap: { [key: string]: number } = {
+                  'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                  'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
                 };
                 
-                // Avoid duplicates
-                if (!tournaments.find(t => t.name === name)) {
-                  tournaments.push(tournament);
-                  console.log(`Found tournament: ${name} - ${location}, ${surface}, ${category}`);
+                const month1Num = monthMap[month1];
+                const month2Num = monthMap[month2];
+                
+                if (month1Num !== undefined && month2Num !== undefined) {
+                  startDate = new Date(year, month1Num, day1);
+                  endDate = new Date(year, month2Num, day2);
+                }
+              }
+              
+              // Extract prize money (look for patterns like "$8.8M", "$75.0M")
+              let prizeMoney = 1000000; // Default
+              const prizeMatch = container.match(/\$([0-9.]+)M/);
+              if (prizeMatch) {
+                prizeMoney = Math.floor(parseFloat(prizeMatch[1]) * 1000000);
+              }
+              
+              // Determine tournament category based on name
+              let category = 'ATP 250';
+              if (name.includes('Open') || name.includes('Championships')) {
+                category = 'Grand Slam';
+              } else if (name.includes('Masters') || name.includes('1000')) {
+                category = 'ATP 1000';
+              } else if (name.includes('500')) {
+                category = 'ATP 500';
+              } else if (name.includes('Finals')) {
+                category = 'ATP Finals';
+              }
+              
+              // Determine status based on dates
+              let status = 'upcoming';
+              const now = new Date();
+              if (startDate <= now && endDate >= now) {
+                status = 'ongoing';
+              } else if (endDate < now) {
+                status = 'completed';
+              }
+              
+              // Generate tournament object
+              const tournament: Tournament = {
+                name: name,
+                location: location,
+                surface: surface,
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0],
+                prize_money: prizeMoney,
+                category: category,
+                status: status
+              };
+              
+              // Avoid duplicates
+              if (!tournaments.find(t => t.name === name)) {
+                tournaments.push(tournament);
+                console.log(`Found tournament: ${name} - ${location}, ${surface}, ${category}, ${status}, $${prizeMoney/1000000}M`);
+              }
+            }
+          }
+          
+          // Method 2: If no containers found, try parsing tournament links
+          if (tournaments.length === 0) {
+            console.log('Container parsing failed, trying tournament links...');
+            
+            const tournamentMatches = html.match(/<a[^>]*href="[^"]*\/tournaments\/[^"]*"[^>]*>([^<]+)<\/a>/gi);
+            
+            if (tournamentMatches) {
+              for (const match of tournamentMatches) {
+                if (tournaments.length >= 50) break;
+                
+                const nameMatch = match.match(/<a[^>]*href="[^"]*\/tournaments\/[^"]*"[^>]*>([^<]+)<\/a>/i);
+                if (nameMatch) {
+                  const name = nameMatch[1].trim();
+                  
+                  // Skip if name is too short or contains HTML
+                  if (name.length < 3 || name.includes('<') || name.includes('>')) continue;
+                  
+                  // Skip generic tournament links
+                  if (name.toLowerCase().includes('tournaments') || name.toLowerCase().includes('calendar')) continue;
+                  
+                  // Look for tournament details in surrounding context
+                  const contextStart = Math.max(0, html.indexOf(match) - 500);
+                  const contextEnd = Math.min(html.length, html.indexOf(match) + 500);
+                  const context = html.substring(contextStart, contextEnd);
+                  
+                  // Extract location (look for city/country patterns)
+                  let location = 'Unknown';
+                  const locationMatch = context.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\s*([A-Z][a-z]+)/);
+                  if (locationMatch) {
+                    location = `${locationMatch[1]}, ${locationMatch[2]}`;
+                  }
+                  
+                  // Extract surface (look for surface indicators)
+                  let surface = 'Hard';
+                  if (context.includes('clay') || context.includes('Clay')) surface = 'Clay';
+                  else if (context.includes('grass') || context.includes('Grass')) surface = 'Grass';
+                  else if (context.includes('carpet') || context.includes('Carpet')) surface = 'Carpet';
+                  
+                  // Determine tournament category based on name
+                  let category = 'ATP 250';
+                  if (name.includes('Open') || name.includes('Championships')) {
+                    category = 'Grand Slam';
+                  } else if (name.includes('Masters') || name.includes('1000')) {
+                    category = 'ATP 1000';
+                  } else if (name.includes('500')) {
+                    category = 'ATP 500';
+                  } else if (name.includes('Finals')) {
+                    category = 'ATP Finals';
+                  }
+                  
+                  // Generate realistic tournament data
+                  const tournament: Tournament = {
+                    name: name,
+                    location: location,
+                    surface: surface,
+                    start_date: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    end_date: new Date(Date.now() + (Math.random() * 30 + 7) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    prize_money: Math.floor(Math.random() * 1000000) + 100000,
+                    category: category,
+                    status: 'upcoming'
+                  };
+                  
+                  // Avoid duplicates
+                  if (!tournaments.find(t => t.name === name)) {
+                    tournaments.push(tournament);
+                    console.log(`Found tournament via links: ${name} - ${location}, ${surface}, ${category}`);
+                  }
                 }
               }
             }
