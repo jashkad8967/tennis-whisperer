@@ -77,18 +77,20 @@ serve(async (req) => {
 
     // Build context for AI
     const context = `
-Current ATP Tennis Data (August 2025):
+Current ATP Tennis Data (January 2025):
 
-Top 10 Players:
+Top 10 Players (Live Rankings):
 ${players?.map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} points`).join('\n') || 'Loading player data...'}
 
-Recent Tournaments:
+Current Tournaments:
 ${tournaments?.map(t => `${t.name} (${t.location}) - ${t.status} - ${t.surface} court - Prize: $${t.prize_money?.toLocaleString()}`).join('\n') || 'Loading tournament data...'}
 
-Current Statistics:
-- Active Players: ${stats?.[0]?.active_players || 'N/A'}
+Live Statistics:
+- Active Players: ${stats?.[0]?.active_players || 'N/A'}  
 - Matches Today: ${stats?.[0]?.matches_today || 'N/A'}
 - Live Tournaments: ${stats?.[0]?.live_tournaments || 'N/A'}
+
+The Australian Open 2025 is currently ongoing (January 12-26) in Melbourne. Jannik Sinner is the current World No. 1.
 
 Please answer the user's question about tennis using this current data. Be informative and engaging.
 `;
@@ -105,11 +107,13 @@ Please answer the user's question about tennis using this current data. Be infor
         messages: [
           { 
             role: 'system', 
-            content: `You are a tennis statistics assistant with access to current ATP tour data. ${context}` 
+            content: `You are a professional tennis statistics assistant with access to live ATP tour data from January 2025. ${context}
+
+You have real-time access to current rankings, ongoing tournaments, and live statistics. Always reference specific data points and be accurate with your information. Focus on being helpful and informative about tennis rankings, tournaments, players, and current tennis news.` 
           },
           { role: 'user', content: message }
         ],
-        max_completion_tokens: 500
+        max_completion_tokens: 800
       }),
     });
 
