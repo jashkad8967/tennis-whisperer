@@ -477,23 +477,13 @@ async function scrapeTournaments(): Promise<Tournament[]> {
                   status = 'completed';
                 }
                 
-                // Estimate prize money based on category
-                let prizeMoney = 1000000; // Default ATP 250
-                if (category === 'Grand Slam') {
-                  prizeMoney = 50000000 + Math.floor(Math.random() * 30000000);
-                } else if (category === 'ATP 1000') {
-                  prizeMoney = 8000000 + Math.floor(Math.random() * 4000000);
-                } else if (category === 'ATP 500') {
-                  prizeMoney = 2000000 + Math.floor(Math.random() * 1000000);
-                }
-                
                 const tournament: Tournament = {
                   name: name,
                   location: location,
                   surface: 'Hard', // Default, will be updated if found
                   start_date: startDate.toISOString().split('T')[0],
                   end_date: endDate.toISOString().split('T')[0],
-                  prize_money: prizeMoney,
+                  prize_money: 0, // Set to 0 as prize money is not generated here
                   category: category,
                   status: status
                 };
@@ -501,7 +491,7 @@ async function scrapeTournaments(): Promise<Tournament[]> {
                 // Avoid duplicates
                 if (!tournaments.find(t => t.name === name)) {
                   tournaments.push(tournament);
-                  console.log(`Found tournament via pattern: ${name} - ${location}, ${category}, ${status}, $${prizeMoney/1000000}M`);
+                  console.log(`Found tournament via pattern: ${name} - ${location}, ${category}, ${status}, $${tournament.prize_money/1000000}M`);
                 }
               }
             }
@@ -562,9 +552,9 @@ async function scrapeTournaments(): Promise<Tournament[]> {
                     name: name,
                     location: location,
                     surface: surface,
-                    start_date: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    end_date: new Date(Date.now() + (Math.random() * 30 + 7) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                    prize_money: Math.floor(Math.random() * 1000000) + 100000,
+                    start_date: new Date().toISOString().split('T')[0], // Use current date as default
+                    end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Use current date + 7 days as default
+                    prize_money: 0, // Set to 0 as prize money is not available
                     category: category,
                     status: 'upcoming'
                   };
@@ -650,18 +640,20 @@ async function scrapeLiveMatches(): Promise<Match[]> {
             const statusMatch = container.match(/<span[^>]*class="[^"]*status[^"]*"[^>]*>([^<]+)<\/span>/i);
             const status = statusMatch ? statusMatch[1].trim() : 'Live';
             
-            // Create a match object (we'll need to get player IDs from the database)
-            matches.push({
-              tournament_id: 'temp-tournament-id', // Will be updated when we have real tournament data
-              player1_id: 'temp-player1-id', // Will be updated when we have real player data
-              player2_id: 'temp-player2-id', // Will be updated when we have real player data
-              round: 'Live',
-              status: 'live',
-              score: `${player1Name} vs ${player2Name}: ${score}`,
-              match_date: new Date().toISOString()
-            });
-            
-            console.log(`Found live match: ${player1Name} vs ${player2Name} - ${score} (${status})`);
+            // Only create match object if we have real data
+            if (score !== '0-0' && status !== 'Live') {
+              matches.push({
+                tournament_id: '', // Will be updated when we have real tournament data
+                player1_id: '', // Will be updated when we have real player data
+                player2_id: '', // Will be updated when we have real player data
+                round: 'Live',
+                status: 'live',
+                score: `${player1Name} vs ${player2Name}: ${score}`,
+                match_date: new Date().toISOString()
+              });
+              
+              console.log(`Found live match: ${player1Name} vs ${player2Name} - ${score} (${status})`);
+            }
           }
         }
       }
@@ -688,17 +680,20 @@ async function scrapeLiveMatches(): Promise<Match[]> {
         const scoreMatch = context.match(/(\d+)-(\d+)/);
         const score = scoreMatch ? `${scoreMatch[1]}-${scoreMatch[2]}` : '0-0';
         
-        matches.push({
-          tournament_id: 'temp-tournament-id',
-          player1_id: 'temp-player1-id',
-          player2_id: 'temp-player2-id',
-          round: 'Live',
-          status: 'live',
-          score: `${player1} vs ${player2}: ${score}`,
-          match_date: new Date().toISOString()
-        });
-        
-        console.log(`Found live match via pattern: ${player1} vs ${player2} - ${score}`);
+        // Only create match object if we have real data
+        if (score !== '0-0') {
+          matches.push({
+            tournament_id: '', // Will be updated when we have real tournament data
+            player1_id: '', // Will be updated when we have real player data
+            player2_id: '', // Will be updated when we have real player data
+            round: 'Live',
+            status: 'live',
+            score: `${player1} vs ${player2}: ${score}`,
+            match_date: new Date().toISOString()
+          });
+          
+          console.log(`Found live match via pattern: ${player1} vs ${player2} - ${score}`);
+        }
       }
     }
     
@@ -716,89 +711,6 @@ async function scrapeLiveMatches(): Promise<Match[]> {
     
     // Return empty results to avoid false data
     console.log('Returning empty results due to scraping error to avoid false data');
-    return [];
-  }
-}
-
-// Generate realistic live matches for ongoing tournaments only
-async function generateLiveMatches(supabase: any): Promise<Match[]> {
-  try {
-    console.log('Generating realistic live matches...');
-    
-    // Get current players and only ongoing tournaments
-    const { data: players } = await supabase.from('players').select('*').order('ranking').limit(50);
-    const { data: tournaments } = await supabase.from('tournaments').select('*').eq('status', 'ongoing');
-    
-    if (!players || !tournaments || players.length < 4 || tournaments.length === 0) {
-      console.log('No ongoing tournaments or insufficient players for matches');
-      return [];
-    }
-    
-    const matches: Match[] = [];
-    const now = new Date();
-    
-    // Only generate matches for actually ongoing tournaments (like Australian Open in January 2025)
-    for (const tournament of tournaments) {
-      const matchCount = Math.min(3, Math.floor(players.length / 8)); // Reasonable number of live matches
-      
-      for (let i = 0; i < matchCount; i++) {
-        // Select realistic player pairings (avoid top vs bottom unrealistic matchups)
-        const player1Index = Math.floor(Math.random() * Math.min(32, players.length));
-        let player2Index;
-        do {
-          player2Index = Math.floor(Math.random() * Math.min(32, players.length));
-        } while (player2Index === player1Index);
-        
-        const player1 = players[player1Index];
-        const player2 = players[player2Index];
-        
-        if (!player1 || !player2) continue;
-        
-        // Generate realistic tennis score
-        const sets = Math.floor(Math.random() * 2) + 1; // 1-2 completed sets
-        let score = '';
-        
-        for (let set = 0; set < sets; set++) {
-          let p1Games = Math.floor(Math.random() * 7) + 1;
-          let p2Games = Math.floor(Math.random() * 7) + 1;
-          
-          // Make scores more realistic (avoid 1-7, prefer competitive scores)
-          if (Math.abs(p1Games - p2Games) > 4) {
-            p1Games = Math.floor(Math.random() * 3) + 4;
-            p2Games = Math.floor(Math.random() * 3) + 4;
-          }
-          
-          score += (score ? ', ' : '') + `${p1Games}-${p2Games}`;
-        }
-        
-        // Add current set in progress
-        if (Math.random() > 0.4) {
-          const currentP1 = Math.floor(Math.random() * 6);
-          const currentP2 = Math.floor(Math.random() * 6);
-          score += (score ? ', ' : '') + `${currentP1}-${currentP2}`;
-        }
-        
-        // Realistic tournament rounds based on tournament stage
-        const rounds = ['First Round', 'Second Round', 'Third Round', 'Fourth Round'];
-        const round = rounds[Math.floor(Math.random() * rounds.length)];
-        
-        matches.push({
-          tournament_id: tournament.id,
-          player1_id: player1.id,
-          player2_id: player2.id,
-          round: round,
-          status: 'live',
-          score: score,
-          match_date: now.toISOString()
-        });
-      }
-    }
-    
-    console.log(`Generated ${matches.length} realistic live matches for ongoing tournaments`);
-    return matches;
-    
-  } catch (error) {
-    console.error('Error generating live matches:', error);
     return [];
   }
 }
