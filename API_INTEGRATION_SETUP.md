@@ -16,23 +16,23 @@ This guide explains how to set up the new ChatGPT API chatbot and 3rd party tenn
 
 ## 🔑 **Required API Keys**
 
-### **OpenAI API Key**
+### **OpenAI API Key (For Chatbot Only)**
 1. Go to [OpenAI Platform](https://platform.openai.com/)
 2. Sign up/Login and navigate to API Keys
 3. Create a new API key
 4. Copy the key (starts with `sk-`)
 
-### **Livescore API Key (Real Tennis Data)**
-1. Visit [Livescore API](https://livescore-api.com/)
-2. Sign up for an account
-3. Get your API key and secret from the dashboard
-4. **Free tier available** with rate limits
+### **Tennis Data (100% FREE - No API Keys Needed)**
+The system now uses completely free tennis data sources:
+- **Tennis Abstract**: [https://www.tennisabstract.com/](https://www.tennisabstract.com/)
+- **ATP Website**: Official ATP rankings and tournaments
+- **Tennis Stats**: Live scores and statistics
 
-### **Alternative Tennis APIs**
-If Livescore doesn't meet your needs, consider:
-- **Sportradar**: Professional sports data provider ($100-500/month)
-- **API-Football**: Multi-sport data including tennis ($10-50/month)
-- **Tennis Abstract**: Historical data (free with limits)
+**No signup, no credit card, no API keys required!**
+
+### **Optional Premium APIs (If You Want to Upgrade Later)**
+- **Sportradar**: Professional sports data ($100-500/month)
+- **API-Football**: Multi-sport data ($10-50/month)
 
 ## ⚙️ **Environment Configuration**
 
@@ -44,12 +44,14 @@ Add these to your Supabase project's environment variables:
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
-# OpenAI API Configuration
+# OpenAI API Configuration (for chatbot only)
 OPENAI_API_KEY=sk-your_openai_api_key_here
 
-# Livescore API Configuration (Real tennis data)
-LIVESCORE_API_KEY=your_livescore_api_key_here
-LIVESCORE_SECRET=your_livescore_secret_here
+# Tennis Data: 100% FREE - No API keys needed!
+# The system automatically uses:
+# - Tennis Abstract (free)
+# - ATP Website (free)
+# - Tennis Stats (free)
 ```
 
 ### **2. Local Development**
@@ -73,12 +75,11 @@ supabase functions deploy fetch-tennis-data
 
 ### **2. Set Environment Variables in Supabase**
 ```bash
-# Set OpenAI API key
+# Set OpenAI API key (for chatbot only)
 supabase secrets set OPENAI_API_KEY=sk-your_key_here
 
-# Set Livescore API credentials
-supabase secrets set LIVESCORE_API_KEY=your_livescore_key_here
-supabase secrets set LIVESCORE_SECRET=your_livescore_secret_here
+# Tennis data is 100% FREE - no additional setup needed!
+# The system automatically uses free tennis data sources
 ```
 
 ### **3. Test the Functions**
@@ -112,12 +113,12 @@ curl -X POST https://your-project.supabase.co/functions/v1/fetch-tennis-data \
 
 ## 📊 **API Endpoints**
 
-### **Livescore API (Real Tennis Data)**
-- **Live Scores**: `GET /api-client/scores/live.json?key={key}&secret={secret}&category=tennis`
-- **Fixtures**: `GET /api-client/fixtures/matches.json?key={key}&secret={secret}&category=tennis`
-- **Match Details**: `GET /api-client/scores/data.json?key={key}&secret={secret}&id={match_id}`
+### **Free Tennis Data Sources (No API Keys Needed)**
+- **Tennis Abstract**: `https://www.tennisabstract.com/cgi-bin/rankings.cgi`
+- **ATP Website**: `https://www.atptour.com/en/rankings/singles`
+- **Live Scores**: `https://www.tennisabstract.com/cgi-bin/scores.cgi`
 
-### **OpenAI API**
+### **OpenAI API (For Chatbot Only)**
 - **Chat Completions**: `POST /v1/chat/completions`
 - **Model**: `gpt-4o-mini`
 - **Max Tokens**: 500
@@ -149,15 +150,20 @@ curl -X POST https://your-project.supabase.co/functions/v1/fetch-tennis-data \
 
 ## 💰 **Cost Considerations**
 
-### **OpenAI API**
+### **OpenAI API (Chatbot Only)**
 - **GPT-4o-mini**: ~$0.15 per 1M input tokens
 - **Typical cost**: $0.01-0.05 per conversation
 - **Monthly estimate**: $5-20 for moderate usage
 
-### **Tennis Data API**
-- **Tennis Live Data**: $50-200/month depending on plan
-- **Sportradar**: $100-500/month for tennis data
-- **Alternative**: Free tier available on some APIs
+### **Tennis Data (100% FREE)**
+- **Tennis Abstract**: **FREE** - No cost, no limits
+- **ATP Website**: **FREE** - Official data, no cost
+- **Tennis Stats**: **FREE** - Live scores, no cost
+- **Total tennis data cost**: **$0/month** 🎉
+
+### **Optional Premium Upgrades**
+- **Sportradar**: $100-500/month for professional data
+- **API-Football**: $10-50/month for multi-sport data
 
 ## 🔒 **Security Notes**
 
