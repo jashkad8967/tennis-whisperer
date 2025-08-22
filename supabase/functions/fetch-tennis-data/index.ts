@@ -108,15 +108,15 @@ async function scrapeATPRankings(): Promise<Player[]> {
       
       // Avoid duplicates
       if (players.find(p => p.name === playerName || p.ranking === ranking)) continue;
-      
-      players.push({
+          
+          players.push({
         name: playerName,
-        country: country,
+            country: country,
         ranking: ranking,
-        points: points,
+            points: points,
         ranking_change: rankingChange
-      });
-      
+          });
+          
       console.log(`Added player: ${playerName} (#${ranking}, ${country}, ${points} pts, ${rankingChange >= 0 ? '+' : ''}${rankingChange})`);
     }
     
@@ -264,7 +264,7 @@ async function scrapeTournaments(): Promise<Tournament[]> {
         status = 'upcoming';
       }
       
-      tournaments.push({
+    tournaments.push({
         name,
         location,
         surface,
@@ -292,9 +292,127 @@ async function scrapeTournaments(): Promise<Tournament[]> {
         start_date: '2025-01-13',
         end_date: '2025-01-26',
         status: 'ongoing',
-        prize_money: 75000000
+      prize_money: 75000000
       }
     ];
+  }
+}
+
+// Scrape live matches from ATP website
+async function scrapeLiveMatches(): Promise<Match[]> {
+  try {
+    console.log('Fetching live matches from ATP Tour...');
+    
+    const response = await fetch('https://www.atptour.com/en/scores', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const html = await response.text();
+    const matches: Match[] = [];
+    
+    console.log('Parsing live matches HTML...');
+    
+    // Parse live match data from the HTML
+    // Look for match entries with player names and scores
+    
+    // Method 1: Try to find match containers
+    const matchContainers = html.match(/<div[^>]*class="[^"]*match[^"]*"[^>]*>[\s\S]*?<\/div>/gi);
+    
+    if (matchContainers) {
+      console.log(`Found ${matchContainers.length} match containers, parsing...`);
+      
+      for (const container of matchContainers) {
+        if (matches.length >= 20) break;
+        
+        // Extract player names
+        const playerMatches = container.match(/<span[^>]*class="[^"]*player-name[^"]*"[^>]*>([^<]+)<\/span>/gi);
+        
+        if (playerMatches && playerMatches.length >= 2) {
+          const player1Name = playerMatches[0].match(/<span[^>]*class="[^"]*player-name[^"]*"[^>]*>([^<]+)<\/span>/i)?.[1]?.trim();
+          const player2Name = playerMatches[1].match(/<span[^>]*class="[^"]*player-name[^"]*"[^>]*>([^<]+)<\/span>/i)?.[1]?.trim();
+          
+          if (player1Name && player2Name) {
+            // Look for scores in the container
+            const scoreMatch = container.match(/<span[^>]*class="[^"]*score[^"]*"[^>]*>([^<]+)<\/span>/i);
+            const score = scoreMatch ? scoreMatch[1].trim() : '0-0';
+            
+            // Look for match status
+            const statusMatch = container.match(/<span[^>]*class="[^"]*status[^"]*"[^>]*>([^<]+)<\/span>/i);
+            const status = statusMatch ? statusMatch[1].trim() : 'Live';
+            
+            // Create a match object (we'll need to get player IDs from the database)
+            matches.push({
+              tournament_id: 'temp-tournament-id', // Will be updated when we have real tournament data
+              player1_id: 'temp-player1-id', // Will be updated when we have real player data
+              player2_id: 'temp-player2-id', // Will be updated when we have real player data
+              round: 'Live',
+              status: 'live',
+              score: `${player1Name} vs ${player2Name}: ${score}`,
+              match_date: new Date().toISOString()
+            });
+            
+            console.log(`Found live match: ${player1Name} vs ${player2Name} - ${score} (${status})`);
+          }
+        }
+      }
+    }
+    
+    // Method 2: If no matches found with containers, try alternative parsing
+    if (matches.length === 0) {
+      console.log('Container parsing failed, trying alternative approach...');
+      
+      // Look for player names and scores in a different format
+      const playerScorePattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+vs\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi;
+      let match;
+      
+      while ((match = playerScorePattern.exec(html)) !== null && matches.length < 20) {
+        const player1 = match[1].trim();
+        const player2 = match[2].trim();
+        
+        // Look for scores near this match
+        const contextStart = Math.max(0, match.index - 200);
+        const contextEnd = Math.min(html.length, match.index + 200);
+        const context = html.substring(contextStart, contextEnd);
+        
+        // Look for score patterns
+        const scoreMatch = context.match(/(\d+)-(\d+)/);
+        const score = scoreMatch ? `${scoreMatch[1]}-${scoreMatch[2]}` : '0-0';
+        
+        matches.push({
+          tournament_id: 'temp-tournament-id',
+          player1_id: 'temp-player1-id',
+          player2_id: 'temp-player2-id',
+          round: 'Live',
+          status: 'live',
+          score: `${player1} vs ${player2}: ${score}`,
+          match_date: new Date().toISOString()
+        });
+        
+        console.log(`Found live match via pattern: ${player1} vs ${player2} - ${score}`);
+      }
+    }
+    
+    // If still no matches found, return empty results
+    if (matches.length === 0) {
+      console.log('No live matches found, returning empty results to avoid false data');
+      return [];
+    }
+    
+    console.log(`Successfully scraped ${matches.length} live matches`);
+    return matches;
+    
+  } catch (error) {
+    console.error('Error scraping live matches:', error);
+    
+    // Return empty results to avoid false data
+    console.log('Returning empty results due to scraping error to avoid false data');
+    return [];
   }
 }
 
@@ -432,7 +550,7 @@ serve(async (req) => {
     }
 
     // Generate and update live matches
-    const matches = await generateLiveMatches(supabase);
+    const matches = await scrapeLiveMatches();
     if (matches.length > 0) {
       console.log('Updating live matches...');
       
@@ -443,7 +561,7 @@ serve(async (req) => {
       if (matchesError) {
         console.error('Error inserting matches:', matchesError);
       } else {
-        console.log(`Successfully inserted ${matches.length} matches`);
+        console.log(`Successfully inserted ${matches.length} live matches`);
       }
     }
 
@@ -468,7 +586,7 @@ serve(async (req) => {
     console.log('Tennis data fetch completed successfully');
 
     return new Response(JSON.stringify({
-      success: true,
+      success: true, 
       message: 'Tennis data updated successfully',
       data: {
         players: players.length,
@@ -484,7 +602,7 @@ serve(async (req) => {
     console.error('Error in fetch-tennis-data function:', error);
     
     return new Response(JSON.stringify({
-      success: false,
+      success: false, 
       error: error.message,
       message: 'Failed to update tennis data'
     }), {

@@ -7,9 +7,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Store conversation history in memory (in production, you'd use a database)
-const conversationHistory = new Map();
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -55,41 +52,73 @@ serve(async (req) => {
 
     // Build comprehensive context with all current tennis data
     const context = `
-Current ATP Tennis Data (January 2025):
+Current ATP Tennis Data (as of latest update):
 
 Top Players Rankings:
-${players?.slice(0,15).map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} points${p.ranking_change !== 0 ? ` (${p.ranking_change > 0 ? '+' : ''}${p.ranking_change})` : ''}`).join('\n') || 'Loading player data...'}
+${players?.slice(0,15).map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} points${p.ranking_change !== 0 ? ` (${p.ranking_change > 0 ? '+' : ''}${p.ranking_change})` : ''}`).join('\n') || 'Player data currently updating...'}
 
 Current Tournaments:
-${tournaments?.map(t => `${t.name} (${t.location}) - ${t.status} - ${t.surface} - ${t.category} - Prize: $${t.prize_money?.toLocaleString()}`).join('\n') || 'Loading tournament data...'}
+${tournaments?.map(t => `${t.name} (${t.location}) - ${t.status} - ${t.surface} - ${t.category} - Prize: $${t.prize_money?.toLocaleString()}`).join('\n') || 'Tournament data currently updating...'}
 
 Live Matches:
 ${matches?.map(m => `${m.player1?.name} vs ${m.player2?.name} - ${m.tournaments?.name} (${m.round}) - Score: ${m.score || 'Starting soon'}`).join('\n') || 'No live matches currently'}
 
 Tennis Statistics:
-- Active Players: ${stats?.[0]?.active_players || 'N/A'}  
-- Live Matches: ${stats?.[0]?.matches_today || 'N/A'}
-- Live Tournaments: ${stats?.[0]?.live_tournaments || 'N/A'}
-- Recent Ranking Changes: ${stats?.[0]?.ranking_updates || 'N/A'}
+- Active Players: ${stats?.[0]?.active_players || 'Updating...'}  
+- Live Matches: ${stats?.[0]?.matches_today || 'Updating...'}
+- Live Tournaments: ${stats?.[0]?.live_tournaments || 'Updating...'}
+- Recent Ranking Changes: ${stats?.[0]?.ranking_updates || 'Updating...'}
 `;
 
-    // Get or create conversation history
+    // Get conversation history from database for persistence
     const sessionId = conversationId || 'default';
-    if (!conversationHistory.has(sessionId)) {
-      conversationHistory.set(sessionId, []);
+    let conversationHistory = [];
+    
+    try {
+      // Try to get existing conversation history
+      const { data: historyData } = await supabase
+        .from('conversation_history')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true })
+        .limit(10);
+      
+      if (historyData) {
+        conversationHistory = historyData.map(h => ({
+          role: h.role,
+          content: h.content
+        }));
+      }
+    } catch (historyError) {
+      console.log('No conversation history table found, starting fresh conversation');
     }
     
-    const history = conversationHistory.get(sessionId);
-    
     // Add user message to history
-    history.push({ role: 'user', content: message });
+    conversationHistory.push({ role: 'user', content: message });
     
     // Keep only last 10 messages to prevent token limit issues
-    if (history.length > 10) {
-      history.splice(0, history.length - 10);
+    if (conversationHistory.length > 10) {
+      conversationHistory = conversationHistory.slice(-10);
     }
 
     console.log('Making OpenAI API request with conversation history...');
+    
+    // Create dynamic system prompt based on current data
+    const systemPrompt = `You are a knowledgeable tennis expert and coach with access to real-time ATP Tour data. You maintain conversation context and can discuss tennis topics in depth. 
+
+IMPORTANT: Use the provided current tennis data to answer questions accurately. Be conversational, engaging, and provide specific insights about players, rankings, tournaments, and matches when available.
+
+Key Guidelines:
+- Reference specific current data when relevant
+- Maintain conversation context from previous messages
+- Be personable and engaging like a tennis coach
+- Provide analysis and insights, not just facts
+- Ask follow-up questions to keep the conversation going
+- If the user asks about specific players or tournaments, use the current data provided
+- If data is "updating" or unavailable, acknowledge that and offer to help with general tennis knowledge
+
+Current conversation context: ${conversationHistory.length > 1 ? 'This is an ongoing conversation. Maintain context from previous messages.' : 'This is a new conversation.'}`;
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -101,20 +130,13 @@ Tennis Statistics:
         messages: [
           {
             role: 'system',
-            content: `You are a knowledgeable tennis expert and coach with access to real-time ATP Tour data. You maintain conversation context and can discuss tennis topics in depth. Use the provided current tennis data to answer questions accurately. Be conversational, engaging, and provide specific insights about players, rankings, tournaments, and matches when available.
-
-Key Guidelines:
-- Reference specific current data when relevant
-- Maintain conversation context from previous messages
-- Be personable and engaging like a tennis coach
-- Provide analysis and insights, not just facts
-- Ask follow-up questions to keep the conversation going`
+            content: systemPrompt
           },
           {
             role: 'user',
             content: `Current Tennis Data:\n${context}\n\nPlease use this data to inform your responses.`
           },
-          ...history
+          ...conversationHistory
         ],
         max_tokens: 600,
         temperature: 0.8,
@@ -125,19 +147,24 @@ Key Guidelines:
       const errorData = await response.json();
       console.error('OpenAI API error:', errorData);
       
-      // Return fallback response with current data
+      // Generate dynamic fallback response based on current data
+      const topPlayers = players?.slice(0, 5) || [];
+      const liveTournaments = tournaments?.filter(t => t.status === 'ongoing') || [];
+      
+      let fallbackResponse = `I'm experiencing some technical difficulties with my AI brain, but I can still help you with tennis information! `;
+      
+      if (topPlayers.length > 0) {
+        fallbackResponse += `\n\n📊 Current Top 5 Players:\n${topPlayers.map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} pts`).join('\n')}`;
+      }
+      
+      if (liveTournaments.length > 0) {
+        fallbackResponse += `\n\n🎾 Live Tournaments:\n${liveTournaments.map(t => `• ${t.name} (${t.location})`).join('\n')}`;
+      }
+      
+      fallbackResponse += `\n\nWhat would you like to know about tennis? I'm here to help!`;
+      
       return new Response(JSON.stringify({
-        response: `I can help you with tennis information! Here's what's happening right now:
-
-📊 Current Top 5 Players:
-${players?.slice(0,5).map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} pts`).join('\n') || 'Loading...'}
-
-${tournaments?.filter(t => t.status === 'ongoing').length > 0 ? 
-`🎾 Live Tournaments:
-${tournaments.filter(t => t.status === 'ongoing').map(t => `• ${t.name} (${t.location})`).join('\n')}` : 
-'No tournaments currently live'}
-
-What would you like to know about tennis?`
+        response: fallbackResponse
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
@@ -148,7 +175,28 @@ What would you like to know about tennis?`
     const aiResponse = data.choices[0].message.content;
     
     // Add AI response to conversation history
-    history.push({ role: 'assistant', content: aiResponse });
+    conversationHistory.push({ role: 'assistant', content: aiResponse });
+    
+    // Try to save conversation history to database for persistence
+    try {
+      // Save user message
+      await supabase.from('conversation_history').insert({
+        session_id: sessionId,
+        role: 'user',
+        content: message,
+        created_at: new Date().toISOString()
+      });
+      
+      // Save AI response
+      await supabase.from('conversation_history').insert({
+        session_id: sessionId,
+        role: 'assistant',
+        content: aiResponse,
+        created_at: new Date().toISOString()
+      });
+    } catch (saveError) {
+      console.log('Could not save conversation history:', saveError);
+    }
     
     console.log('AI response generated successfully');
 
@@ -162,8 +210,18 @@ What would you like to know about tennis?`
   } catch (error) {
     console.error('Error in tennis-chatbot function:', error);
     
+    // Generate different error responses to avoid repetition
+    const errorResponses = [
+      "I'm having a bit of a technical moment, but I'm still your tennis expert! What would you like to know about the current ATP Tour?",
+      "Oops, my tennis brain is a bit fuzzy right now. Let me help you with tennis knowledge - what's on your mind?",
+      "I'm experiencing some connectivity issues, but I'm here to chat tennis! What would you like to discuss about current players or tournaments?",
+      "My AI is taking a quick break, but I'm still ready to talk tennis! What would you like to know about the current ATP season?"
+    ];
+    
+    const randomResponse = errorResponses[Math.floor(Math.random() * errorResponses.length)];
+    
     return new Response(JSON.stringify({
-      response: 'I apologize for the technical difficulty. Let me try to help you with tennis information. What would you like to know about current players or tournaments?'
+      response: randomResponse
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
