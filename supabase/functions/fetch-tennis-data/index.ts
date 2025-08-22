@@ -36,20 +36,19 @@ interface Match {
   match_date: string;
 }
 
-// Fetch ATP rankings from Tennis Live Data API
+// Fetch ATP rankings from Livescore API
 async function fetchATPRankings(): Promise<Player[]> {
   try {
-    console.log('Fetching ATP rankings from Tennis Live Data API...');
+    console.log('Fetching ATP rankings from Livescore API...');
     
-    const apiKey = Deno.env.get('TENNIS_API_KEY');
+    const apiKey = Deno.env.get('LIVESCORE_API_KEY');
     if (!apiKey) {
-      console.log('No tennis API key configured, using fallback method...');
+      console.log('No Livescore API key configured, using fallback method...');
       return await fetchATPRankingsFallback();
     }
 
-    const response = await fetch('https://api.tennis-live-data.com/v1/rankings/atp/singles', {
+    const response = await fetch('https://livescore-api.com/api-client/scores/live.json?key=' + apiKey + '&secret=your_secret_here&category=tennis', {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -61,23 +60,42 @@ async function fetchATPRankings(): Promise<Player[]> {
     const data = await response.json();
     const players: Player[] = [];
 
-    if (data.rankings && Array.isArray(data.rankings)) {
-      data.rankings.slice(0, 100).forEach((player: any) => {
-        players.push({
-          name: player.player_name || player.name,
-          country: player.country_code || player.country,
-          ranking: player.rank || player.ranking,
-          points: player.points || 0,
-          ranking_change: player.ranking_change || player.change || 0
-        });
+    if (data.data && data.data.match) {
+      // Extract player rankings from live match data
+      const uniquePlayers = new Set();
+      
+      data.data.match.forEach((match: any) => {
+        if (match.home_name && match.away_name) {
+          if (!uniquePlayers.has(match.home_name)) {
+            uniquePlayers.add(match.home_name);
+            players.push({
+              name: match.home_name,
+              country: 'Unknown',
+              ranking: players.length + 1,
+              points: 0,
+              ranking_change: 0
+            });
+          }
+          
+          if (!uniquePlayers.has(match.away_name)) {
+            uniquePlayers.add(match.away_name);
+            players.push({
+              name: match.away_name,
+              country: 'Unknown',
+              ranking: players.length + 1,
+              points: 0,
+              ranking_change: 0
+            });
+          }
+        }
       });
     }
 
-    console.log(`Successfully fetched ${players.length} players from Tennis Live Data API`);
+    console.log(`Successfully fetched ${players.length} players from Livescore API`);
     return players;
 
   } catch (error) {
-    console.error('Error fetching from Tennis Live Data API:', error);
+    console.error('Error fetching from Livescore API:', error);
     console.log('Falling back to alternative method...');
     return await fetchATPRankingsFallback();
   }
@@ -131,20 +149,19 @@ async function fetchATPRankingsFallback(): Promise<Player[]> {
   }
 }
 
-// Fetch tournaments from Tennis Live Data API
+// Fetch tournaments from Livescore API
 async function fetchTournaments(): Promise<Tournament[]> {
   try {
-    console.log('Fetching tournaments from Tennis Live Data API...');
+    console.log('Fetching tournaments from Livescore API...');
     
-    const apiKey = Deno.env.get('TENNIS_API_KEY');
+    const apiKey = Deno.env.get('LIVESCORE_API_KEY');
     if (!apiKey) {
-      console.log('No tennis API key configured, using fallback method...');
+      console.log('No Livescore API key configured, using fallback method...');
       return await fetchTournamentsFallback();
     }
 
-    const response = await fetch('https://api.tennis-live-data.com/v1/tournaments/atp', {
+    const response = await fetch('https://livescore-api.com/api-client/fixtures/matches.json?key=' + apiKey + '&secret=your_secret_here&category=tennis', {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -156,26 +173,44 @@ async function fetchTournaments(): Promise<Tournament[]> {
     const data = await response.json();
     const tournaments: Tournament[] = [];
 
-    if (data.tournaments && Array.isArray(data.tournaments)) {
-      data.tournaments.forEach((tournament: any) => {
-        tournaments.push({
-          name: tournament.name || tournament.tournament_name,
-          location: tournament.location || tournament.city,
-          surface: tournament.surface || 'Hard',
-          category: tournament.category || tournament.level || 'ATP 250',
-          start_date: tournament.start_date || new Date().toISOString().split('T')[0],
-          end_date: tournament.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          status: tournament.status || 'upcoming',
-          prize_money: tournament.prize_money || tournament.prize || 0
-        });
+    if (data.data && data.data.fixtures) {
+      const uniqueTournaments = new Set();
+      
+      data.data.fixtures.forEach((fixture: any) => {
+        if (fixture.league_name && !uniqueTournaments.has(fixture.league_name)) {
+          uniqueTournaments.add(fixture.league_name);
+          
+          // Determine tournament category based on name
+          let category = 'ATP 250';
+          if (fixture.league_name.includes('Open') || fixture.league_name.includes('Championships')) {
+            category = 'Grand Slam';
+          } else if (fixture.league_name.includes('Masters') || fixture.league_name.includes('1000')) {
+            category = 'ATP 1000';
+          } else if (fixture.league_name.includes('500')) {
+            category = 'ATP 500';
+          } else if (fixture.league_name.includes('Finals')) {
+            category = 'ATP Finals';
+          }
+
+          tournaments.push({
+            name: fixture.league_name,
+            location: fixture.country || 'Unknown',
+            surface: 'Hard', // Default, could be enhanced with more data
+            category: category,
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'ongoing',
+            prize_money: 0
+          });
+        }
       });
     }
 
-    console.log(`Successfully fetched ${tournaments.length} tournaments from Tennis Live Data API`);
+    console.log(`Successfully fetched ${tournaments.length} tournaments from Livescore API`);
     return tournaments;
 
   } catch (error) {
-    console.error('Error fetching from Tennis Live Data API:', error);
+    console.error('Error fetching from Livescore API:', error);
     console.log('Falling back to alternative method...');
     return await fetchTournamentsFallback();
   }
@@ -254,20 +289,19 @@ async function fetchTournamentsFallback(): Promise<Tournament[]> {
   }
 }
 
-// Fetch live matches from Tennis Live Data API
+// Fetch live matches from Livescore API
 async function fetchLiveMatches(): Promise<Match[]> {
   try {
-    console.log('Fetching live matches from Tennis Live Data API...');
+    console.log('Fetching live matches from Livescore API...');
     
-    const apiKey = Deno.env.get('TENNIS_API_KEY');
+    const apiKey = Deno.env.get('LIVESCORE_API_KEY');
     if (!apiKey) {
-      console.log('No tennis API key configured, using fallback method...');
+      console.log('No Livescore API key configured, using fallback method...');
       return await fetchLiveMatchesFallback();
     }
 
-    const response = await fetch('https://api.tennis-live-data.com/v1/matches/live', {
+    const response = await fetch('https://livescore-api.com/api-client/scores/live.json?key=' + apiKey + '&secret=your_secret_here&category=tennis', {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -279,25 +313,29 @@ async function fetchLiveMatches(): Promise<Match[]> {
     const data = await response.json();
     const matches: Match[] = [];
 
-    if (data.matches && Array.isArray(data.matches)) {
-      data.matches.forEach((match: any) => {
-        matches.push({
-          tournament_id: match.tournament_id || '',
-          player1_id: match.player1_id || '',
-          player2_id: match.player2_id || '',
-          round: match.round || 'Live',
-          status: 'live',
-          score: match.score || `${match.player1_name} vs ${match.player2_name}`,
-          match_date: match.match_date || new Date().toISOString()
-        });
+    if (data.data && data.data.match) {
+      data.data.match.forEach((match: any) => {
+        if (match.home_name && match.away_name && match.status === 'LIVE') {
+          const score = match.score ? match.score : '0-0';
+          
+          matches.push({
+            tournament_id: match.league_id || '',
+            player1_id: '',
+            player2_id: '',
+            round: match.round || 'Live',
+            status: 'live',
+            score: `${match.home_name} vs ${match.away_name}: ${score}`,
+            match_date: new Date().toISOString()
+          });
+        }
       });
     }
 
-    console.log(`Successfully fetched ${matches.length} live matches from Tennis Live Data API`);
+    console.log(`Successfully fetched ${matches.length} live matches from Livescore API`);
     return matches;
 
   } catch (error) {
-    console.error('Error fetching from Tennis Live Data API:', error);
+    console.error('Error fetching from Livescore API:', error);
     console.log('Falling back to alternative method...');
     return await fetchLiveMatchesFallback();
   }

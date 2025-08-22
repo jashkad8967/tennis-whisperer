@@ -22,17 +22,17 @@ This guide explains how to set up the new ChatGPT API chatbot and 3rd party tenn
 3. Create a new API key
 4. Copy the key (starts with `sk-`)
 
-### **Tennis Live Data API Key**
-1. Visit [Tennis Live Data](https://tennis-live-data.com/)
+### **Livescore API Key (Real Tennis Data)**
+1. Visit [Livescore API](https://livescore-api.com/)
 2. Sign up for an account
-3. Subscribe to their API service
-4. Get your API key from the dashboard
+3. Get your API key and secret from the dashboard
+4. **Free tier available** with rate limits
 
 ### **Alternative Tennis APIs**
-If Tennis Live Data is not available, consider:
-- **Sportradar**: Professional sports data provider
-- **Livescore**: Real-time sports scores
-- **API-Football**: Multi-sport data (includes tennis)
+If Livescore doesn't meet your needs, consider:
+- **Sportradar**: Professional sports data provider ($100-500/month)
+- **API-Football**: Multi-sport data including tennis ($10-50/month)
+- **Tennis Abstract**: Historical data (free with limits)
 
 ## ⚙️ **Environment Configuration**
 
@@ -47,8 +47,9 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 # OpenAI API Configuration
 OPENAI_API_KEY=sk-your_openai_api_key_here
 
-# Tennis Live Data API Configuration
-TENNIS_API_KEY=your_tennis_live_data_api_key_here
+# Livescore API Configuration (Real tennis data)
+LIVESCORE_API_KEY=your_livescore_api_key_here
+LIVESCORE_SECRET=your_livescore_secret_here
 ```
 
 ### **2. Local Development**
@@ -75,8 +76,9 @@ supabase functions deploy fetch-tennis-data
 # Set OpenAI API key
 supabase secrets set OPENAI_API_KEY=sk-your_key_here
 
-# Set Tennis API key
-supabase secrets set TENNIS_API_KEY=your_key_here
+# Set Livescore API credentials
+supabase secrets set LIVESCORE_API_KEY=your_livescore_key_here
+supabase secrets set LIVESCORE_SECRET=your_livescore_secret_here
 ```
 
 ### **3. Test the Functions**
@@ -110,10 +112,10 @@ curl -X POST https://your-project.supabase.co/functions/v1/fetch-tennis-data \
 
 ## 📊 **API Endpoints**
 
-### **Tennis Live Data API**
-- **Rankings**: `GET /v1/rankings/atp/singles`
-- **Tournaments**: `GET /v1/tournaments/atp`
-- **Live Matches**: `GET /v1/matches/live`
+### **Livescore API (Real Tennis Data)**
+- **Live Scores**: `GET /api-client/scores/live.json?key={key}&secret={secret}&category=tennis`
+- **Fixtures**: `GET /api-client/fixtures/matches.json?key={key}&secret={secret}&category=tennis`
+- **Match Details**: `GET /api-client/scores/data.json?key={key}&secret={secret}&id={match_id}`
 
 ### **OpenAI API**
 - **Chat Completions**: `POST /v1/chat/completions`
