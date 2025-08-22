@@ -79,11 +79,11 @@ Please answer the user's question about tennis using this current data. Be infor
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `You are a knowledgeable tennis expert and coach. Use the following current tennis data to answer questions accurately and engagingly. If you don't have specific information, be honest about it and provide general tennis knowledge instead.`
+            content: `You are a knowledgeable tennis expert and coach with access to current ATP Tour data. Use the provided tennis data to answer questions accurately and engagingly. Be specific about rankings, tournaments, and match results when you have the data. If you don't have specific information about something, acknowledge it and provide general tennis knowledge instead.`
           },
           {
             role: 'user',
