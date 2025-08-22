@@ -38,12 +38,16 @@ const TennisChatbot = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputMessage;
     setInputMessage("");
     setIsLoading(true);
 
     try {
       const { data, error } = await supabase.functions.invoke('tennis-chatbot', {
-        body: { message: inputMessage }
+        body: { 
+          message: currentInput,
+          conversationId: 'session-' + Date.now() // Simple session ID
+        }
       });
 
       if (error) throw error;
@@ -61,7 +65,7 @@ const TennisChatbot = () => {
       
       const errorMessage: Message = {
         id: messages.length + 2,
-        text: "I'm experiencing some technical difficulties. Please try again in a moment.",
+        text: "I apologize for the technical issue. I'm here to help with tennis questions - try asking about current rankings or tournaments!",
         sender: "bot",
         timestamp: new Date()
       };
@@ -69,8 +73,8 @@ const TennisChatbot = () => {
       setMessages(prev => [...prev, errorMessage]);
       
       toast({
-        title: "Error",
-        description: "Failed to get response from chatbot",
+        title: "Connection Issue",
+        description: "Please try your tennis question again",
         variant: "destructive",
       });
     } finally {

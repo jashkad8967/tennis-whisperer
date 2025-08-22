@@ -7,13 +7,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Store conversation history in memory (in production, you'd use a database)
+const conversationHistory = new Map();
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { message } = await req.json();
+    const { message, conversationId } = await req.json();
     
     if (!message) {
       return new Response(JSON.stringify({ 
@@ -30,48 +33,63 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch current tennis data for context with error handling
+    // Fetch current tennis data for context
     console.log('Fetching tennis data...');
     
-    const [playersResponse, tournamentsResponse, statsResponse] = await Promise.all([
-      supabase.from('players').select('*').order('ranking').limit(15),
-      supabase.from('tournaments').select('*').order('start_date'),
+    const [playersResponse, tournamentsResponse, matchesResponse, statsResponse] = await Promise.all([
+      supabase.from('players').select('*').order('ranking').limit(20),
+      supabase.from('tournaments').select('*').order('start_date').limit(10),
+      supabase.from('matches').select(`
+        id, round, status, score, match_date,
+        tournaments!tournament_id(name, surface),
+        player1:players!player1_id(name, ranking),
+        player2:players!player2_id(name, ranking)
+      `).eq('status', 'live').limit(5),
       supabase.from('statistics').select('*').limit(1)
     ]);
 
-    const { data: players, error: playersError } = playersResponse;
-    const { data: tournaments, error: tournamentsError } = tournamentsResponse; 
-    const { data: stats, error: statsError } = statsResponse;
+    const { data: players } = playersResponse;
+    const { data: tournaments } = tournamentsResponse;
+    const { data: matches } = matchesResponse;
+    const { data: stats } = statsResponse;
 
-    if (playersError) {
-      console.error('Error fetching players:', playersError);
-    }
-    if (tournamentsError) {
-      console.error('Error fetching tournaments:', tournamentsError);
-    }
-    if (statsError) {
-      console.error('Error fetching statistics:', statsError);
-    }
-
-    // Build context for AI with dynamic data
+    // Build comprehensive context with all current tennis data
     const context = `
 Current ATP Tennis Data (January 2025):
 
 Top Players Rankings:
-${players?.slice(0,10).map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} points`).join('\n') || 'Loading player data...'}
+${players?.slice(0,15).map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} points${p.ranking_change !== 0 ? ` (${p.ranking_change > 0 ? '+' : ''}${p.ranking_change})` : ''}`).join('\n') || 'Loading player data...'}
 
 Current Tournaments:
-${tournaments?.slice(0,5).map(t => `${t.name} (${t.location}) - ${t.status} - ${t.surface} court - Prize: $${t.prize_money?.toLocaleString()}`).join('\n') || 'Loading tournament data...'}
+${tournaments?.map(t => `${t.name} (${t.location}) - ${t.status} - ${t.surface} - ${t.category} - Prize: $${t.prize_money?.toLocaleString()}`).join('\n') || 'Loading tournament data...'}
 
-Live Statistics:
+Live Matches:
+${matches?.map(m => `${m.player1?.name} vs ${m.player2?.name} - ${m.tournaments?.name} (${m.round}) - Score: ${m.score || 'Starting soon'}`).join('\n') || 'No live matches currently'}
+
+Tennis Statistics:
 - Active Players: ${stats?.[0]?.active_players || 'N/A'}  
-- Matches Today: ${stats?.[0]?.matches_today || 'N/A'}
+- Live Matches: ${stats?.[0]?.matches_today || 'N/A'}
 - Live Tournaments: ${stats?.[0]?.live_tournaments || 'N/A'}
-
-Please answer the user's question about tennis using this current data. Be informative and engaging.
+- Recent Ranking Changes: ${stats?.[0]?.ranking_updates || 'N/A'}
 `;
 
-    console.log('Making OpenAI API request...');
+    // Get or create conversation history
+    const sessionId = conversationId || 'default';
+    if (!conversationHistory.has(sessionId)) {
+      conversationHistory.set(sessionId, []);
+    }
+    
+    const history = conversationHistory.get(sessionId);
+    
+    // Add user message to history
+    history.push({ role: 'user', content: message });
+    
+    // Keep only last 10 messages to prevent token limit issues
+    if (history.length > 10) {
+      history.splice(0, history.length - 10);
+    }
+
+    console.log('Making OpenAI API request with conversation history...');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -83,15 +101,23 @@ Please answer the user's question about tennis using this current data. Be infor
         messages: [
           {
             role: 'system',
-            content: `You are a knowledgeable tennis expert and coach with access to current ATP Tour data. Use the provided tennis data to answer questions accurately and engagingly. Be specific about rankings, tournaments, and match results when you have the data. If you don't have specific information about something, acknowledge it and provide general tennis knowledge instead.`
+            content: `You are a knowledgeable tennis expert and coach with access to real-time ATP Tour data. You maintain conversation context and can discuss tennis topics in depth. Use the provided current tennis data to answer questions accurately. Be conversational, engaging, and provide specific insights about players, rankings, tournaments, and matches when available.
+
+Key Guidelines:
+- Reference specific current data when relevant
+- Maintain conversation context from previous messages
+- Be personable and engaging like a tennis coach
+- Provide analysis and insights, not just facts
+- Ask follow-up questions to keep the conversation going`
           },
           {
             role: 'user',
-            content: `${context}\n\nUser Question: ${message}`
-          }
+            content: `Current Tennis Data:\n${context}\n\nPlease use this data to inform your responses.`
+          },
+          ...history
         ],
-        max_tokens: 500,
-        temperature: 0.7,
+        max_tokens: 600,
+        temperature: 0.8,
       }),
     });
 
@@ -99,14 +125,19 @@ Please answer the user's question about tennis using this current data. Be infor
       const errorData = await response.json();
       console.error('OpenAI API error:', errorData);
       
-      // Return a helpful response with available data
+      // Return fallback response with current data
       return new Response(JSON.stringify({
-        response: `I can tell you about current tennis rankings and tournaments based on the latest data. Here's what I know:
+        response: `I can help you with tennis information! Here's what's happening right now:
 
-Top Players:
-${players?.slice(0,5).map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} pts`).join('\n') || 'Data loading...'}
+📊 Current Top 5 Players:
+${players?.slice(0,5).map(p => `${p.ranking}. ${p.name} (${p.country}) - ${p.points} pts`).join('\n') || 'Loading...'}
 
-Feel free to ask me about specific players, rankings, or tournament information!`
+${tournaments?.filter(t => t.status === 'ongoing').length > 0 ? 
+`🎾 Live Tournaments:
+${tournaments.filter(t => t.status === 'ongoing').map(t => `• ${t.name} (${t.location})`).join('\n')}` : 
+'No tournaments currently live'}
+
+What would you like to know about tennis?`
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
@@ -115,6 +146,10 @@ Feel free to ask me about specific players, rankings, or tournament information!
 
     const data = await response.json();
     const aiResponse = data.choices[0].message.content;
+    
+    // Add AI response to conversation history
+    history.push({ role: 'assistant', content: aiResponse });
+    
     console.log('AI response generated successfully');
 
     return new Response(
@@ -127,14 +162,11 @@ Feel free to ask me about specific players, rankings, or tournament information!
   } catch (error) {
     console.error('Error in tennis-chatbot function:', error);
     
-    // Return a generic error message without referencing specific data
     return new Response(JSON.stringify({
-      success: false,
-      error: 'Service temporarily unavailable',
-      message: 'I apologize, but I\'m having trouble accessing the latest tennis information right now. Please try asking your question again in a moment.'
+      response: 'I apologize for the technical difficulty. Let me try to help you with tennis information. What would you like to know about current players or tournaments?'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
+      status: 200
     });
   }
 });
