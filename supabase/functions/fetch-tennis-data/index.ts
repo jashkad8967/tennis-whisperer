@@ -36,66 +36,10 @@ interface Match {
   match_date: string;
 }
 
-// Fetch ATP rankings from free tennis data sources
+// Fetch ATP rankings from ATP official website
 async function fetchATPRankings(): Promise<Player[]> {
   try {
-    console.log('Fetching ATP rankings from free tennis data sources...');
-    
-    // Try Tennis Abstract first (free, no API key needed)
-    try {
-      const response = await fetch('https://www.tennisabstract.com/cgi-bin/rankings.cgi', {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-      });
-
-      if (response.ok) {
-        const html = await response.text();
-        const players: Player[] = [];
-
-        // Parse Tennis Abstract rankings
-        const rankingPattern = /<td[^>]*>(\d+)<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>([^<]+)<\/td>\s*<td[^>]*>([^<]+)<\/td>/gi;
-        let match;
-
-        while ((match = rankingPattern.exec(html)) !== null && players.length < 100) {
-          const ranking = parseInt(match[1]);
-          const name = match[2].trim();
-          const country = match[3].trim();
-          const points = parseInt(match[4].replace(/,/g, '')) || 0;
-
-          if (name && !isNaN(ranking) && ranking > 0 && ranking <= 100 && points >= 0) {
-            players.push({
-              name: name,
-              country: country,
-              ranking: ranking,
-              points: points,
-              ranking_change: 0 // Tennis Abstract doesn't show ranking changes
-            });
-          }
-        }
-
-        if (players.length > 0) {
-          console.log(`Successfully fetched ${players.length} players from Tennis Abstract`);
-          return players;
-        }
-      }
-    } catch (error) {
-      console.log('Tennis Abstract failed, trying ATP website...');
-    }
-
-    // Fallback to ATP website
-    return await fetchATPRankingsFallback();
-
-  } catch (error) {
-    console.error('Error fetching from free tennis sources:', error);
-    return await fetchATPRankingsFallback();
-  }
-}
-
-// Fallback method using ATP website
-async function fetchATPRankingsFallback(): Promise<Player[]> {
-  try {
-    console.log('Fetching ATP rankings from ATP website (fallback)...');
+    console.log('Fetching ATP rankings from ATP official website...');
     
     const response = await fetch('https://www.atptour.com/en/rankings/singles', {
       headers: {
@@ -110,35 +54,73 @@ async function fetchATPRankingsFallback(): Promise<Player[]> {
     const html = await response.text();
     const players: Player[] = [];
 
-    // Parse rankings using regex patterns
-    const rankingPattern = /(\d+)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(\d{2})\s+([0-9,]+)\s+([+-]\d+)?/gi;
-    let match;
-
-    while ((match = rankingPattern.exec(html)) !== null && players.length < 100) {
-      const ranking = parseInt(match[1]);
-      const name = match[2].trim();
-      const points = parseInt(match[3].replace(/,/g, ''));
-      const change = match[4] ? parseInt(match[4]) : 0;
-
-      if (name && !isNaN(ranking) && !isNaN(points) && ranking > 0 && ranking <= 100 && points >= 0) {
-        players.push({
-          name: name,
-          country: 'Unknown',
-          ranking: ranking,
-          points: points,
-          ranking_change: change
-        });
+    // Extract the actual table rows from the ATP rankings page
+    const tableRowRegex = /<tr[^>]*>[\s\S]*?<\/tr>/gi;
+    const rows = html.match(tableRowRegex);
+    
+    if (rows) {
+      let currentRank = 1;
+      
+      for (const row of rows) {
+        try {
+          // Skip header rows and empty rows
+          if (row.includes('<th') || !row.includes('href=') || !row.includes('players')) continue;
+          
+          // Extract player name from ATP player links
+          const nameMatch = row.match(/<a[^>]*href="[^"]*\/players\/[^"]*"[^>]*>([^<]+)<\/a>/);
+          if (!nameMatch) continue;
+          
+          const playerName = nameMatch[1].trim();
+          if (!playerName || playerName.length < 2) continue;
+          
+          // Extract points from bracketed format [11,480]
+          const pointsMatch = row.match(/\[([0-9,]+)\]/);
+          const points = pointsMatch ? parseInt(pointsMatch[1].replace(/,/g, '')) : 0;
+          
+          // Extract country code from flag images
+          let country = 'N/A';
+          const countryMatch = row.match(/flags\/([A-Z]{2,3})\.png/i);
+          if (countryMatch) {
+            country = countryMatch[1].toUpperCase();
+          }
+          
+          // Extract ranking change if available (look for +/- patterns)
+          let rankingChange = 0;
+          const changeMatch = row.match(/([+-]?\d+)<br>/);
+          if (changeMatch && changeMatch[1] !== '0') {
+            rankingChange = parseInt(changeMatch[1]);
+          }
+          
+          // Only add valid players with proper data
+          if (playerName && points > 0 && currentRank <= 100) {
+            players.push({
+              name: playerName,
+              country: country,
+              ranking: currentRank,
+              points: points,
+              ranking_change: rankingChange
+            });
+            currentRank++;
+          }
+          
+          if (players.length >= 100) break;
+        } catch (error) {
+          console.log('Error parsing row:', error);
+          continue;
+        }
       }
     }
-
+    
     console.log(`Successfully scraped ${players.length} players from ATP website`);
+    console.log('Top 5 players:', players.slice(0, 5).map(p => `${p.ranking}. ${p.name} (${p.points} pts)`));
     return players;
 
   } catch (error) {
-    console.error('Error in fallback rankings fetch:', error);
+    console.error('Error fetching ATP rankings:', error);
     return [];
   }
 }
+
 
 // Fetch tournaments from free tennis data sources
 async function fetchTournaments(): Promise<Tournament[]> {

@@ -15,6 +15,7 @@ interface Message {
 }
 
 const TennisChatbot = () => {
+  const [sessionId] = useState(() => `session-${Date.now()}-${Math.random()}`);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -46,7 +47,7 @@ const TennisChatbot = () => {
       const { data, error } = await supabase.functions.invoke('tennis-chatbot', {
         body: { 
           message: currentInput,
-          conversationId: 'session-' + Date.now() // Simple session ID
+          sessionId: sessionId // Use consistent session ID
         }
       });
 
